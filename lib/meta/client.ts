@@ -355,6 +355,27 @@ export async function sendMessage(
   return handleResponse(response);
 }
 
+/**
+ * Replaces the account's ice breakers (up to 4 questions shown on a new
+ * chat); an empty list removes them. A tap arrives as a postback carrying the
+ * question's payload.
+ */
+export async function setIceBreakers(
+  accessToken: string,
+  items: { question: string; payload: string }[]
+): Promise<void> {
+  const response = await fetch(`${instagramGraphBase()}/me/messenger_profile`, {
+    method: items.length ? "POST" : "DELETE",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify(
+      items.length
+        ? { platform: "instagram", ice_breakers: [{ call_to_actions: items, locale: "default" }] }
+        : { fields: ["ice_breakers"] }
+    ),
+  });
+  await handleResponse(response);
+}
+
 /** Puts a heart on one of their messages; the only reaction Instagram's API offers. */
 export async function reactToMessage(
   accessToken: string,
@@ -872,7 +893,8 @@ export async function subscribeInstagramAccountToWebhooks(
         Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        subscribed_fields: ["comments", "live_comments", "messages"],
+        // messaging_postbacks carries button and welcome-question taps.
+        subscribed_fields: ["comments", "live_comments", "messages", "messaging_postbacks"],
       }),
     }
   );

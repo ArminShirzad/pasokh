@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
-import type { OutboundMessage } from "@/lib/messages/outbound";
+import { showcaseIdsOf, type StoredResponse } from "@/lib/messages/stored";
 import { commandInputSchema, commandProblems, referencedCommandIds, type CommandInput } from "./schema";
 
 export function presentCommand(c: {
@@ -51,10 +51,17 @@ export async function readCommandInput(
   const problems = commandProblems(input);
   // A menu button may only open a command of the same account; anything else
   // would silently do nothing when tapped.
-  const targets = referencedCommandIds(input.responses as OutboundMessage[]).filter((id) => id !== selfId);
+  const responses = input.responses as StoredResponse[];
+  const targets = referencedCommandIds(responses).filter((id) => id !== selfId);
   if (targets.length) {
     const found = await prisma.command.count({ where: { id: { in: targets }, instagramAccountId: input.instagramAccountId } });
     if (found !== targets.length) problems.push({ path: "responses", message: "A button points to a command that no longer exists." });
+  }
+  // Same for showcases: one of another account would never be sent.
+  const showcases = showcaseIdsOf(responses);
+  if (showcases.length) {
+    const found = await prisma.showcase.count({ where: { id: { in: showcases }, instagramAccountId: input.instagramAccountId } });
+    if (found !== showcases.length) problems.push({ path: "responses", message: "A showcase in this reply no longer exists." });
   }
   if (problems.length) return { response: NextResponse.json({ error: "Invalid command", problems }, { status: 400 }) };
   return { input };

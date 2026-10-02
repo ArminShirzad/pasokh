@@ -44,6 +44,11 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   if (!(await owned(id, context.workspaceId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // A welcome question on Instagram would answer nothing without it.
+  const questions = await prisma.iceBreaker.count({ where: { commandId: id } });
+  if (questions) {
+    return NextResponse.json({ error: "A welcome question opens this smart reply. Change the question first." }, { status: 409 });
+  }
   // Buttons in other commands that opened this one would now do nothing;
   // the builder warns about them via the referencing check on next save.
   await prisma.command.delete({ where: { id } });

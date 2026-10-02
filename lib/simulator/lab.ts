@@ -3,6 +3,7 @@ import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { processInstagramWebhook } from "@/lib/queue/process-webhook";
 import { SIM_LIVE_ID, SIM_POSTS } from "./provider";
+import { commandPayload } from "@/lib/commands/engine";
 
 /**
  * The test lab: one simulated Instagram account per workspace and one
@@ -51,16 +52,21 @@ export async function ensureLab(workspaceId: string) {
 
 export async function labState(workspaceId: string) {
   const { account, fan } = await ensureLab(workspaceId);
-  const events = await prisma.simulatorEvent.findMany({
-    where: { instagramAccountId: account.id },
-    orderBy: { createdAt: "asc" },
-    take: 300,
-  });
+  const [events, iceBreakers] = await Promise.all([
+    prisma.simulatorEvent.findMany({
+      where: { instagramAccountId: account.id },
+      orderBy: { createdAt: "asc" },
+      take: 300,
+    }),
+    prisma.iceBreaker.findMany({ where: { instagramAccountId: account.id }, orderBy: { position: "asc" } }),
+  ]);
   return {
     account: { id: account.id, username: account.username },
     fan: { username: fan.username, follows: fan.follows },
     posts: SIM_POSTS.map((p) => ({ id: p.id, caption: p.caption ?? "", type: p.media_type })),
     liveId: SIM_LIVE_ID,
+    // Instagram shows these on a chat with no messages yet; a tap is a postback.
+    iceBreakers: iceBreakers.map((i) => ({ question: i.question, payload: commandPayload(i.commandId) })),
     events: events.map((e) => ({
       id: e.id,
       direction: e.direction,

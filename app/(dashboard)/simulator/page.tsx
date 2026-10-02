@@ -29,6 +29,7 @@ type LabState = {
   fan: { username: string; follows: boolean };
   posts: { id: string; caption: string; type: string }[];
   liveId: string;
+  iceBreakers: { question: string; payload: string }[];
   events: LabEvent[];
 };
 
@@ -183,6 +184,22 @@ export default function SimulatorPage() {
 
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {chatEvents.length === 0 && <p className="text-center text-sm text-muted">{t("No messages yet. Comment on a post or send a DM.")}</p>}
+            {chatEvents.length === 0 && state.iceBreakers.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-center text-xs text-muted">{t("Welcome questions, as Instagram shows them on a new chat")}</p>
+                {state.iceBreakers.map((item) => (
+                  <button
+                    key={item.payload + item.question}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void act({ action: "tap", payload: item.payload, title: item.question })}
+                    className="block w-full rounded-full border border-border px-4 py-2 text-center text-sm text-foreground hover:bg-surface-hover disabled:opacity-50"
+                  >
+                    {item.question}
+                  </button>
+                ))}
+              </div>
+            )}
             {chatEvents.map((e) => (
               <ChatLine key={e.id} event={e} interactive={e.id === lastOut?.id} onTap={(payload, title, quickReply) => void act({ action: "tap", payload, title, quickReply })} />
             ))}

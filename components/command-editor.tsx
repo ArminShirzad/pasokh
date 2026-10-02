@@ -15,6 +15,8 @@ import MessagePreview from "@/components/message-preview";
 import { useI18n } from "@/lib/i18n/provider";
 import type { StaticMessageKey } from "@/lib/i18n";
 import type { Card, MediaType, MessageButton, OutboundMessage, QuickReply } from "@/lib/messages/outbound";
+import type { StoredResponse } from "@/lib/messages/stored";
+import Link from "next/link";
 
 export type CommandDraft = {
   id?: string;
@@ -27,10 +29,11 @@ export type CommandDraft = {
   storyIds: string[];
   onStoryMention: boolean;
   likeTrigger: boolean;
-  responses: OutboundMessage[];
+  responses: StoredResponse[];
 };
 
-type CommandSummary = { id: string; name: string };
+export type CommandSummary = { id: string; name: string };
+export type ShowcaseSummary = { id: string; name: string; cards: Card[] };
 type Story = { id: string; media_url?: string; thumbnail_url?: string; timestamp?: string };
 type Problem = { path: string; message: string };
 
@@ -49,6 +52,7 @@ export default function CommandEditor({
   const router = useRouter();
   const [draft, setDraft] = useState<CommandDraft>(initial);
   const [commands, setCommands] = useState<CommandSummary[]>([]);
+  const [showcases, setShowcases] = useState<ShowcaseSummary[] | null>(null);
   const [stories, setStories] = useState<Story[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -69,6 +73,18 @@ export default function CommandEditor({
   }, [draft.instagramAccountId, draft.id]);
 
   useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/showcases?accountId=${encodeURIComponent(draft.instagramAccountId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setShowcases(data.showcases ?? []);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draft.instagramAccountId]);
+
+  useEffect(() => {
     if (draft.storyScope !== "SPECIFIC") return;
     let cancelled = false;
     void fetch(`/api/instagram/stories?instagramAccountId=${encodeURIComponent(draft.instagramAccountId)}`)
@@ -87,7 +103,14 @@ export default function CommandEditor({
     return name ? `→ ${name}` : null;
   };
 
-  function updateResponse(index: number, next: OutboundMessage) {
+  // What the follower receives for a stored response: a showcase as its cards.
+  const asSent = (r: StoredResponse): OutboundMessage | null => {
+    if (r.type !== "showcase") return r;
+    const showcase = showcases?.find((s) => s.id === r.showcaseId);
+    return showcase ? { type: "cards", cards: showcase.cards } : null;
+  };
+
+  function updateResponse(index: number, next: StoredResponse) {
     set("responses", draft.responses.map((r, i) => (i === index ? next : r)));
   }
   function moveResponse(index: number, by: -1 | 1) {
@@ -248,6 +271,7 @@ export default function CommandEditor({
               canMoveUp={index > 0}
               canMoveDown={index < draft.responses.length - 1}
               commands={commands}
+              showcases={showcases}
               problems={problemsAt(`responses[${index}]`)}
             />
           ))}
@@ -268,6 +292,9 @@ export default function CommandEditor({
               ))}
               <button type="button" className={smallButton} onClick={() => set("responses", [...draft.responses, { type: "cards", cards: [{ title: "" }] }])}>
                 + {t("Cards")}
+              </button>
+              <button type="button" className={smallButton} onClick={() => set("responses", [...draft.responses, { type: "showcase", showcaseId: "" }])}>
+                + {t("Showcase")}
               </button>
             </div>
           )}
@@ -299,13 +326,20 @@ export default function CommandEditor({
                 <div className="rounded-2xl rounded-ee-md bg-accent px-4 py-2 text-sm text-white">{draft.keywords[0]}</div>
               </div>
             )}
-            {draft.responses.map((r, i) => (
-              <div key={i} className="flex justify-start">
-                <div className="max-w-[90%] rounded-2xl rounded-es-md bg-surface px-4 py-2 text-sm text-foreground">
-                  <MessagePreview message={r} interactive={i === draft.responses.length - 1} describeTarget={describeTarget} />
+            {draft.responses.map((r, i) => {
+              const message = asSent(r);
+              return (
+                <div key={i} className="flex justify-start">
+                  <div className="max-w-[90%] rounded-2xl rounded-es-md bg-surface px-4 py-2 text-sm text-foreground">
+                    {message ? (
+                      <MessagePreview message={message} interactive={i === draft.responses.length - 1} describeTarget={describeTarget} />
+                    ) : (
+                      <span className="text-xs text-muted">{t("Choose a showcase")}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </aside>
@@ -338,29 +372,29 @@ async function uploadFile(file: File): Promise<{ url: string } | { error: string
   return response.ok ? { url: data.asset.url } : { error: data.error ?? "Upload failed" };
 }
 
-function ResponseEditor({
-  value,
-  onChange,
-  onRemove,
-  onMove,
-  canMoveUp,
-  canMoveDown,
-  commands,
-  problems,
-}: {
-  value: OutboundMessage;
-  onChange: (next: OutboundMessage) => void;
-  onRemove?: () => void;
-  onMove: (by: -1 | 1) => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
-  commands: CommandSummary[];
-  problems: Problem[];
-}) {
-  const { t } = useI18n();
+/** A file input whose button speaks the interface language (the browser's own says "Choose File"). */
+function FilePicker({ label, accept, disabled, onPick }: { label: string; accept: string; disabled?: boolean; onPick: (file: File | undefined) => void }) {
+  return (
+    <label className={`${smallButton} inline-block cursor-pointer ${disabled ? "pointer-events-none opacity-50" : ""}`}>
+      {label}
+      <input
+        type="file"
+        accept={accept}
+        disabled={disabled}
+        className="sr-only"
+        onChange={(e) => {
+          onPick(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
+/** Upload state shared by the media and card editors. */
+function useUpload() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
   async function upload(file: File | undefined, apply: (url: string) => void) {
     if (!file) return;
     setUploading(true);
@@ -370,9 +404,41 @@ function ResponseEditor({
     if ("url" in result) apply(result.url);
     else setUploadError(result.error);
   }
+  return { uploading, uploadError, upload };
+}
+
+function ResponseEditor({
+  value,
+  onChange,
+  onRemove,
+  onMove,
+  canMoveUp,
+  canMoveDown,
+  commands,
+  showcases,
+  problems,
+}: {
+  value: StoredResponse;
+  onChange: (next: StoredResponse) => void;
+  onRemove?: () => void;
+  onMove: (by: -1 | 1) => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  commands: CommandSummary[];
+  showcases: ShowcaseSummary[] | null;
+  problems: Problem[];
+}) {
+  const { t } = useI18n();
+  const { uploading, uploadError, upload } = useUpload();
 
   const title =
-    value.type === "text" ? t("Text") : value.type === "cards" ? t("Cards") : t(MEDIA_LABEL[value.mediaType]);
+    value.type === "text"
+      ? t("Text")
+      : value.type === "cards"
+        ? t("Cards")
+        : value.type === "showcase"
+          ? t("Showcase")
+          : t(MEDIA_LABEL[value.mediaType]);
 
   return (
     <div className={`space-y-3 rounded-xl border bg-surface p-4 ${problems.length ? "border-error/50" : "border-border"}`}>
@@ -392,42 +458,36 @@ function ResponseEditor({
       {value.type === "media" && (
         <div className="space-y-2">
           {value.url && <MessagePreview message={value} />}
-          <input
-            type="file"
+          <FilePicker
+            label={value.url ? t("Replace file") : t("Choose file")}
             accept={MEDIA_ACCEPT[value.mediaType]}
             disabled={uploading}
-            onChange={(e) => void upload(e.target.files?.[0], (url) => onChange({ ...value, url }))}
-            className="block w-full text-xs"
+            onPick={(file) => void upload(file, (url) => onChange({ ...value, url }))}
           />
           {uploading && <p className="text-xs text-muted">{t("Uploading…")}</p>}
         </div>
       )}
 
       {value.type === "cards" && (
-        <div className="space-y-3">
-          {value.cards.map((card, ci) => (
-            <div key={ci} className="space-y-2 rounded-lg border border-border bg-background p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold">{t("Card {number}", { number: ci + 1 })}</p>
-                {value.cards.length > 1 && (
-                  <button type="button" className="text-xs text-error" onClick={() => onChange({ ...value, cards: value.cards.filter((_, i) => i !== ci) })}>
-                    {t("Remove")}
-                  </button>
-                )}
-              </div>
-              <CardEditor
-                card={card}
-                commands={commands}
-                onChange={(next) => onChange({ ...value, cards: value.cards.map((c, i) => (i === ci ? next : c)) })}
-                onUpload={(file, apply) => void upload(file, apply)}
-              />
-            </div>
-          ))}
-          {value.cards.length < 10 && (
-            <button type="button" className={smallButton} onClick={() => onChange({ ...value, cards: [...value.cards, { title: "" }] })}>
-              + {t("Add card")}
-            </button>
+        <CardsEditor cards={value.cards} commands={commands} onChange={(cards) => onChange({ ...value, cards })} />
+      )}
+
+      {value.type === "showcase" && (
+        <div className="space-y-2">
+          {showcases && showcases.length === 0 ? (
+            <p className="text-xs text-muted">
+              {t("This account has no showcases yet.")}{" "}
+              <Link href="/showcases/new" className="text-accent underline">{t("New showcase")}</Link>
+            </p>
+          ) : (
+            <select className={field} value={value.showcaseId} onChange={(e) => onChange({ type: "showcase", showcaseId: e.target.value })}>
+              <option value="">{t("Choose a showcase")}</option>
+              {(showcases ?? []).map((sc) => (
+                <option key={sc.id} value={sc.id}>{sc.name}</option>
+              ))}
+            </select>
           )}
+          <p className="text-xs text-muted">{t("Sends the showcase as it is when the reply goes out, so editing the showcase updates every reply that shows it.")}</p>
         </div>
       )}
 
@@ -435,6 +495,54 @@ function ResponseEditor({
       {problems.map((p, i) => (
         <p key={i} className="text-xs text-error">{t(p.message as StaticMessageKey)}</p>
       ))}
+    </div>
+  );
+}
+
+/** Up to 10 cards with images and buttons; shared by smart replies and showcases. */
+export function CardsEditor({
+  cards,
+  commands,
+  onChange,
+  problemsFor,
+}: {
+  cards: Card[];
+  commands: CommandSummary[];
+  onChange: (cards: Card[]) => void;
+  problemsFor?: (index: number) => Problem[];
+}) {
+  const { t } = useI18n();
+  const { uploading, uploadError, upload } = useUpload();
+  return (
+    <div className="space-y-3">
+      {cards.map((card, ci) => (
+        <div key={ci} className={`space-y-2 rounded-lg border bg-background p-3 ${problemsFor?.(ci).length ? "border-error/50" : "border-border"}`}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold">{t("Card {number}", { number: ci + 1 })}</p>
+            {cards.length > 1 && (
+              <button type="button" className="text-xs text-error" onClick={() => onChange(cards.filter((_, i) => i !== ci))}>
+                {t("Remove")}
+              </button>
+            )}
+          </div>
+          <CardEditor
+            card={card}
+            commands={commands}
+            onChange={(next) => onChange(cards.map((c, i) => (i === ci ? next : c)))}
+            onUpload={(file, apply) => void upload(file, apply)}
+          />
+          {problemsFor?.(ci).map((p, i) => (
+            <p key={i} className="text-xs text-error">{t(p.message as StaticMessageKey)}</p>
+          ))}
+        </div>
+      ))}
+      {uploading && <p className="text-xs text-muted">{t("Uploading…")}</p>}
+      {uploadError && <p className="text-xs text-error">{t(uploadError as StaticMessageKey)}</p>}
+      {cards.length < 10 && (
+        <button type="button" className={smallButton} onClick={() => onChange([...cards, { title: "" }])}>
+          + {t("Add card")}
+        </button>
+      )}
     </div>
   );
 }
@@ -588,7 +696,11 @@ function CardEditor({
       <div className="flex items-center gap-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {card.imageUrl && <img src={card.imageUrl} alt="" className="h-12 w-12 rounded object-cover" />}
-        <input type="file" accept="image/jpeg,image/png" className="text-xs" onChange={(e) => onUpload(e.target.files?.[0], (url) => onChange({ ...card, imageUrl: url }))} />
+        <FilePicker
+          label={card.imageUrl ? t("Replace photo") : t("Choose photo")}
+          accept="image/jpeg,image/png"
+          onPick={(file) => onUpload(file, (url) => onChange({ ...card, imageUrl: url }))}
+        />
       </div>
       <ButtonList buttons={card.buttons ?? []} commands={commands} onChange={(buttons) => onChange({ ...card, buttons: buttons.length ? buttons : undefined })} />
     </div>

@@ -1,12 +1,13 @@
 import { z } from "zod";
-import { validateOutbound, type OutboundMessage } from "@/lib/messages/outbound";
+import { validateOutbound, type Card, type OutboundMessage } from "@/lib/messages/outbound";
+import type { StoredResponse } from "@/lib/messages/stored";
 
 const button = z.discriminatedUnion("type", [
   z.object({ type: z.literal("url"), title: z.string(), url: z.string() }),
   z.object({ type: z.literal("postback"), title: z.string(), payload: z.string() }),
 ]);
 const quickReply = z.object({ title: z.string(), payload: z.string() });
-const card = z.object({
+export const cardSchema = z.object({
   title: z.string(),
   subtitle: z.string().optional(),
   imageUrl: z.string().optional(),
@@ -16,7 +17,12 @@ const card = z.object({
 export const outboundSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string(), buttons: z.array(button).optional(), quickReplies: z.array(quickReply).optional() }),
   z.object({ type: z.literal("media"), mediaType: z.enum(["image", "video", "audio", "file"]), url: z.string() }),
-  z.object({ type: z.literal("cards"), cards: z.array(card) }),
+  z.object({ type: z.literal("cards"), cards: z.array(cardSchema) }),
+]);
+
+const responseSchema = z.union([
+  outboundSchema,
+  z.object({ type: z.literal("showcase"), showcaseId: z.string().min(1).max(40) }),
 ]);
 
 export const MAX_RESPONSES = 10;
@@ -31,7 +37,7 @@ export const commandInputSchema = z.object({
   storyIds: z.array(z.string().min(1)).max(20).default([]),
   onStoryMention: z.boolean().default(false),
   likeTrigger: z.boolean().default(false),
-  responses: z.array(outboundSchema).min(1).max(MAX_RESPONSES),
+  responses: z.array(responseSchema).min(1).max(MAX_RESPONSES),
 });
 
 export type CommandInput = z.infer<typeof commandInputSchema>;
@@ -46,13 +52,15 @@ export function commandProblems(input: CommandInput): { path: string; message: s
     problems.push({ path: "storyIds", message: "Choose at least one story." });
   }
   input.responses.forEach((response, i) => {
+    // A showcase's cards are checked when the showcase is saved.
+    if (response.type === "showcase") return;
     for (const p of validateOutbound(response as OutboundMessage)) problems.push({ path: `responses[${i}].${p.path}`, message: p.message });
   });
   return problems;
 }
 
 /** Every cmd:<id> a command's buttons and quick replies point at. */
-export function referencedCommandIds(responses: OutboundMessage[]): string[] {
+export function referencedCommandIds(responses: StoredResponse[]): string[] {
   const ids = new Set<string>();
   const visit = (payload: string) => {
     const m = /^cmd:(.+)$/.exec(payload);
@@ -63,7 +71,19 @@ export function referencedCommandIds(responses: OutboundMessage[]): string[] {
       r.buttons?.forEach((b) => b.type === "postback" && visit(b.payload));
       r.quickReplies?.forEach((q) => visit(q.payload));
     } else if (r.type === "cards") {
-      r.cards.forEach((c) => c.buttons?.forEach((b) => b.type === "postback" && visit(b.payload)));
+      cardCommandIds(r.cards).forEach((id) => ids.add(id));
+    }
+  }
+  return [...ids];
+}
+
+/** Every cmd:<id> the buttons of these cards point at. */
+export function cardCommandIds(cards: Card[]): string[] {
+  const ids = new Set<string>();
+  for (const c of cards) {
+    for (const b of c.buttons ?? []) {
+      const m = b.type === "postback" ? /^cmd:(.+)$/.exec(b.payload) : null;
+      if (m) ids.add(m[1]);
     }
   }
   return [...ids];

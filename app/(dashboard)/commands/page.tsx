@@ -7,7 +7,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import { useI18n } from "@/lib/i18n/provider";
-import type { OutboundMessage } from "@/lib/messages/outbound";
+import type { StaticMessageKey } from "@/lib/i18n";
+import type { StoredResponse } from "@/lib/messages/stored";
 
 type CommandRow = {
   id: string;
@@ -18,11 +19,11 @@ type CommandRow = {
   keywords: string[];
   storyScope: string;
   onStoryMention: boolean;
-  responses: OutboundMessage[];
+  responses: StoredResponse[];
   runs: number;
 };
 
-function firstText(responses: OutboundMessage[]): string {
+function firstText(responses: StoredResponse[]): string {
   for (const r of responses) {
     if (r.type === "text") return r.text;
     if (r.type === "cards") return r.cards.map((c) => c.title).join(" · ");
@@ -74,7 +75,12 @@ export default function CommandsPage() {
 
   async function remove(command: CommandRow) {
     if (!confirm(t("Delete the command “{name}”? Buttons in other commands that open it will stop working.", { name: command.name }))) return;
-    await fetch(`/api/commands/${command.id}`, { method: "DELETE" });
+    const response = await fetch(`/api/commands/${command.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      alert(data.error ? t(data.error as StaticMessageKey) : t("Could not delete it."));
+      return;
+    }
     await load();
   }
 

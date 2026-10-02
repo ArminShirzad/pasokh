@@ -1,10 +1,11 @@
 /**
- * Whole campaign flows through the real worker, against a real Postgres and
- * the test lab's provider (which refuses what Instagram refuses). Jobs the
- * webhook and the worker queue are run in order, as BullMQ would.
+ * Whole campaign, smart-reply and welcome-question flows through the real
+ * worker, against a real Postgres and the test lab's provider (which refuses
+ * what Instagram refuses). Jobs the webhook and the worker queue are run in
+ * order, as BullMQ would.
  *
  *   TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:55432/pasokh \
- *     npx vitest run __tests__/campaign-flows.db.test.ts
+ *     npx vitest run __tests__/flows.db.test.ts
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -58,7 +59,8 @@ vi.mock("bullmq", () => ({
   UnrecoverableError: class UnrecoverableError extends Error {},
 }));
 
-import { ensureLab, runLabAction } from "../lib/simulator/lab";
+import { ensureLab, labState, runLabAction } from "../lib/simulator/lab";
+import { saveIceBreakers } from "../lib/ice-breakers/service";
 import { createDMWorker } from "../lib/queue/dm-worker";
 
 const schema = `flows_${randomBytes(4).toString("hex")}`;
@@ -140,7 +142,9 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     state.jobs = [];
     state.redis.clear();
     await state.db.automation.deleteMany();
+    await state.db.iceBreaker.deleteMany();
     await state.db.command.deleteMany();
+    await state.db.showcase.deleteMany();
     await runLabAction("ws", { action: "reset" });
     accountId = (await ensureLab("ws")).account.id;
   });
@@ -211,5 +215,64 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
       posted.push((reply.body as { text: string }).text);
     }
     for (let i = 1; i < posted.length; i++) expect(posted[i]).not.toBe(posted[i - 1]);
+  }, 30_000); // eight comments through the worker; slow when the whole suite runs at once
+  async function showcase(cards: unknown[]) {
+    return state.db.showcase.create({ data: { workspaceId: "ws", instagramAccountId: accountId, name: "پاییزه", cards: cards as never } });
+  }
+
+  async function keywordCommand(keyword: string, responses: unknown[]) {
+    return state.db.command.create({
+      data: { workspaceId: "ws", instagramAccountId: accountId, name: keyword, keywords: [keyword], responses: responses as never },
+    });
+  }
+
+  it("sends a showcase as it is now, so editing it changes every smart reply that shows it", async () => {
+    const shelf = await showcase([{ title: "کیف", subtitle: "۲۰۰ هزار تومان" }]);
+    await keywordCommand("ویترین", [{ type: "text", text: "محصولات:" }, { type: "showcase", showcaseId: shelf.id }]);
+
+    await act({ action: "dm", text: "ویترین" });
+    await state.db.showcase.update({ where: { id: shelf.id }, data: { cards: [{ title: "کیف", subtitle: "۱۵۰ هزار تومان (حراج)" }] } });
+    await act({ action: "dm", text: "ویترین" });
+
+    const cards = (await sent()).filter((e) => (e.body as { type?: string }).type === "cards");
+    expect(cards.map((e) => (e.body as { cards: { subtitle: string }[] }).cards[0].subtitle)).toEqual(["۲۰۰ هزار تومان", "۱۵۰ هزار تومان (حراج)"]);
+  });
+
+  it("fails a smart reply whose showcase was deleted, saying so, instead of sending the messages around it as if complete", async () => {
+    const shelf = await showcase([{ title: "کیف" }]);
+    const cmd = await keywordCommand("ویترین", [{ type: "showcase", showcaseId: shelf.id }, { type: "text", text: "بعدی" }]);
+    await state.db.showcase.delete({ where: { id: shelf.id } });
+
+    await act({ action: "dm", text: "ویترین" });
+    expect(await sent()).toEqual([]);
+    expect(await state.db.commandRun.findFirst({ where: { commandId: cmd.id } })).toMatchObject({ status: "FAILED", error: expect.stringMatching(/showcase was deleted/) });
+  });
+
+  it("does not send another account's showcase, even if a reply names it", async () => {
+    const elsewhere = await state.db.instagramAccount.create({
+      data: { workspaceId: "ws", instagramId: "other_ig", username: "other", accessToken: "", provider: "SIMULATOR" },
+    });
+    const foreign = await state.db.showcase.create({ data: { workspaceId: "ws", instagramAccountId: elsewhere.id, name: "x", cards: [{ title: "خارجی" }] } });
+    await keywordCommand("ویترین", [{ type: "showcase", showcaseId: foreign.id }]);
+    await act({ action: "dm", text: "ویترین" });
+    expect(await sent()).toEqual([]);
+    await state.db.showcase.delete({ where: { id: foreign.id } });
+    await state.db.instagramAccount.delete({ where: { id: elsewhere.id } });
+  });
+
+  it("answers a tap on a welcome question with its smart reply, on a chat that had no messages before", async () => {
+    const shipping = await command([{ type: "text", text: "ارسال رایگان است" }]);
+    expect(await saveIceBreakers({ instagramAccountId: accountId, items: [{ question: "هزینهٔ ارسال؟", commandId: shipping.id }] })).toEqual({ pushed: true });
+
+    const lab = await labState("ws");
+    expect(lab.iceBreakers).toEqual([{ question: "هزینهٔ ارسال؟", payload: `cmd:${shipping.id}` }]);
+    await act({ action: "tap", payload: lab.iceBreakers[0].payload, title: lab.iceBreakers[0].question });
+    expect((await sent()).map((e) => e.body)).toEqual([{ type: "text", text: "ارسال رایگان است" }]);
+  });
+
+  it("refuses to delete a smart reply a welcome question opens, which would leave a question on Instagram answering nothing", async () => {
+    const shipping = await command([{ type: "text", text: "x" }]);
+    await saveIceBreakers({ instagramAccountId: accountId, items: [{ question: "؟", commandId: shipping.id }] });
+    await expect(state.db.command.delete({ where: { id: shipping.id } })).rejects.toThrow();
   });
 });

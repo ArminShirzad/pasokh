@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const db = vi.hoisted(() => ({ accounts: ["acc1"], commandsOnAccount: new Map<string, string>() }));
+const db = vi.hoisted(() => ({ accounts: ["acc1"], commandsOnAccount: new Map<string, string>(), showcasesOnAccount: new Map<string, string>() }));
 vi.mock("@/lib/db/client", () => ({
   prisma: {
     instagramAccount: {
@@ -9,6 +9,10 @@ vi.mock("@/lib/db/client", () => ({
     command: {
       count: async ({ where }: { where: { id: { in: string[] }; instagramAccountId: string } }) =>
         where.id.in.filter((id) => db.commandsOnAccount.get(id) === where.instagramAccountId).length,
+    },
+    showcase: {
+      count: async ({ where }: { where: { id: { in: string[] }; instagramAccountId: string } }) =>
+        where.id.in.filter((id) => db.showcasesOnAccount.get(id) === where.instagramAccountId).length,
     },
   },
 }));
@@ -26,6 +30,7 @@ const req = (body: unknown) => new Request("http://x", { method: "POST", body: J
 
 beforeEach(() => {
   db.commandsOnAccount = new Map([["tehran0001", "acc1"], ["elsewhere01", "acc2"]]);
+  db.showcasesOnAccount = new Map([["shelf00001", "acc1"], ["shelf00002", "acc2"]]);
 });
 
 describe("saving a command", () => {
@@ -49,6 +54,13 @@ describe("saving a command", () => {
     expect("input" in (await readCommandInput(req(quick("cmd:tehran0001")), "ws"))).toBe(true);
     const bad = await readCommandInput(req(quick("cmd:elsewhere01")), "ws");
     expect("response" in bad && (await bad.response.json()).problems[0].message).toBe("A button points to a command that no longer exists.");
+  });
+
+  it("refuses a showcase of another account, which the reply could never send", async () => {
+    const withShowcase = (showcaseId: string) => ({ ...base, responses: [{ type: "showcase", showcaseId }] });
+    expect("input" in (await readCommandInput(req(withShowcase("shelf00001")), "ws"))).toBe(true);
+    const bad = await readCommandInput(req(withShowcase("shelf00002")), "ws");
+    expect("response" in bad && (await bad.response.json()).problems[0].message).toBe("A showcase in this reply no longer exists.");
   });
 
   it("refuses an Instagram account outside the workspace", async () => {

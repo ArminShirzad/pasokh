@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db/client";
 import { classifySendError, isConfirmedSendRejection, isDeliveryUnconfirmed } from "@/lib/instagram/delivery-errors";
 import { RateLimitError, createInstagramContext, reactToMessage, sendOutboundMessage } from "@/lib/instagram/provider";
-import { validateOutbound, type OutboundMessage } from "@/lib/messages/outbound";
+import { validateOutbound, type Card, type OutboundMessage } from "@/lib/messages/outbound";
+import { resolveResponses, showcaseIdsOf, type StoredResponse } from "@/lib/messages/stored";
 import { matchExact, matchKeywords } from "@/lib/utils/keyword-matcher";
 
 /** A button or quick reply whose payload is this runs the command. */
@@ -121,7 +122,7 @@ export async function runCommand({
   triggerText: string;
   username?: string | null;
 }): Promise<"DONE" | "FAILED" | "UNCONFIRMED" | "SKIPPED"> {
-  const responses = Array.isArray(command.responses) ? (command.responses as OutboundMessage[]) : [];
+  const stored = Array.isArray(command.responses) ? (command.responses as StoredResponse[]) : [];
   const run = await prisma.commandRun.upsert({
     where: { commandId_triggerMessageId: { commandId: command.id, triggerMessageId } },
     create: { commandId: command.id, contactIgsid: igsid, triggerMessageId, triggerText: triggerText.slice(0, 500) },
@@ -129,14 +130,28 @@ export async function runCommand({
   });
   if (run.status !== "RUNNING") return "SKIPPED";
 
+  // A showcase is sent as it is now, so a price changed after the reply was
+  // built still goes out right.
+  const showcaseIds = showcaseIdsOf(stored);
+  const showcases = showcaseIds.length
+    ? await prisma.showcase.findMany({
+        where: { id: { in: showcaseIds }, instagramAccountId: command.instagramAccount.id },
+        select: { id: true, cards: true },
+      })
+    : [];
+  const resolved = resolveResponses(stored, new Map(showcases.map((s) => [s.id, s.cards as Card[]])));
+
   // Responses are validated when saved; one that is invalid now (edited by
-  // hand, or limits changed) fails the run cleanly instead of reaching the
-  // provider, where its rejection would read as a possibly-delivered send.
-  const invalid = responses.findIndex((r) => validateOutbound(r).length > 0);
+  // hand, limits changed, or its showcase deleted) fails the run cleanly
+  // instead of reaching the provider, where its rejection would read as a
+  // possibly-delivered send.
+  const invalid = resolved.findIndex((r) => r === null || validateOutbound(r).length > 0);
   if (invalid >= run.sent && invalid !== -1) {
-    await prisma.commandRun.update({ where: { id: run.id }, data: { status: "FAILED", error: `Response ${invalid + 1} is not a valid message` } });
+    const why = resolved[invalid] === null ? "its showcase was deleted" : "it is not a valid message";
+    await prisma.commandRun.update({ where: { id: run.id }, data: { status: "FAILED", error: `Response ${invalid + 1}: ${why}` } });
     return "FAILED";
   }
+  const responses = resolved as OutboundMessage[];
 
   const context = await createInstagramContext(command.instagramAccount, `cmd:${run.id}`);
   const instagramAccountId = command.instagramAccount.instagramId;
