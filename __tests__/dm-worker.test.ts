@@ -22,6 +22,8 @@ const {
     postbackDelivery: { create: vi.fn(), delete: vi.fn() },
     // No form is open: messages go on to campaigns and commands.
     formSubmission: { findFirst: async () => null },
+    // No AI assistant: unmatched messages get no reply.
+    aiAssistant: { findFirst: async () => null },
     automation: {
       findMany: vi.fn(),
       findFirst: vi.fn(),

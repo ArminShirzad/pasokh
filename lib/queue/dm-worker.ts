@@ -62,6 +62,7 @@ import { COMMAND_PAYLOAD, activeCommandsFor, commandForCampaign, commandFromPayl
 import { ZernioApiError } from "@/lib/zernio/client";
 import { runSequenceStep } from "@/lib/sequences/engine";
 import { handleFormMessage } from "@/lib/forms/engine";
+import { answerWithAi } from "@/lib/ai/assistant";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -1710,6 +1711,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
   });
 
   const dedupeId = `dm:${messageId}`;
+  let campaignMatched = false;
 
   for (const automation of automations) {
     const matchResult = automation.matchAnyWord
@@ -1721,6 +1723,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         );
 
     if (!matchResult.matched) continue;
+    campaignMatched = true;
 
     const existingLog = await prisma.dmLog.findUnique({
       where: {
@@ -1958,6 +1961,17 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       });
       throw error;
     }
+  }
+
+  // Nothing else answered: the AI assistant does, if the account has one on.
+  if (!campaignMatched) {
+    await answerWithAi({
+      instagramId: instagramAccountId,
+      accountConnectionId: job.data.accountConnectionId,
+      igsid: senderId,
+      messageId,
+      text: messageText,
+    });
   }
 }
 

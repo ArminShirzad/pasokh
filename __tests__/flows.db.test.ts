@@ -62,6 +62,7 @@ vi.mock("bullmq", () => ({
 
 import { ensureLab, labState, runLabAction } from "../lib/simulator/lab";
 import { saveIceBreakers } from "../lib/ice-breakers/service";
+import { encryptToken } from "../lib/meta/oauth";
 import { createDMWorker } from "../lib/queue/dm-worker";
 
 const schema = `flows_${randomBytes(4).toString("hex")}`;
@@ -158,6 +159,8 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     await state.db.showcase.deleteMany();
     await state.db.sequence.deleteMany();
     await state.db.form.deleteMany();
+    await state.db.aiAssistant.deleteMany();
+    vi.unstubAllGlobals();
     await runLabAction("ws", { action: "reset" });
     accountId = (await ensureLab("ws")).account.id;
   });
@@ -422,5 +425,76 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     // from the duplicate being read as the answer to it.
     expect(await texts()).toEqual(["بیا ثبت‌نام کنیم", "شماره‌ات؟", "کدام شهر؟"]);
     expect(await state.db.formSubmission.findFirst({ where: { formId: form.id } })).toMatchObject({ step: 1, status: "IN_PROGRESS" });
+  });
+  // The model endpoint, stubbed: records what it was asked, answers in turn.
+  const model = { calls: [] as { messages: { role: string; content: string }[] }[], answers: [] as (string | number)[] };
+  function stubModel(...answers: (string | number)[]) {
+    model.calls = [];
+    model.answers = answers;
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      model.calls.push(JSON.parse(String(init.body)));
+      const next = model.answers.shift() ?? "؟";
+      return typeof next === "number"
+        ? new Response(JSON.stringify({ error: { message: "busy" } }), { status: next })
+        : new Response(JSON.stringify({ content: [{ type: "text", text: next }] }), { status: 200 });
+    });
+  }
+  async function withAssistant(limit = 20) {
+    process.env.ENCRYPTION_KEY ??= "0".repeat(64);
+    return state.db.aiAssistant.create({
+      data: { instagramAccountId: accountId, enabled: true, model: "claude-sonnet-5-5", apiKey: encryptToken("sk-test"), knowledge: "بلیت ۱۵۰ هزار تومان", dailyLimitPerPerson: limit },
+    });
+  }
+
+  it("answers with AI only the DMs nothing else answered", async () => {
+    await withAssistant();
+    await keywordCommand("ویترین", [{ type: "text", text: "محصولات" }]);
+    stubModel("بلیت ۱۵۰ هزار تومان است.");
+    await act({ action: "dm", text: "ویترین" });
+    await act({ action: "dm", text: "بلیت چنده؟" });
+    expect(await texts()).toEqual(["محصولات", "بلیت ۱۵۰ هزار تومان است."]);
+    expect(model.calls).toHaveLength(1);
+  });
+
+  it("shows the model the earlier exchange, so a follow-up question has something to refer to", async () => {
+    await withAssistant();
+    stubModel("۱۵۰ هزار تومان.", "بله، دانشجویی ۱۰۰ هزار.");
+    await act({ action: "dm", text: "بلیت چنده؟" });
+    await act({ action: "dm", text: "دانشجویی هم داره؟" });
+    expect(model.calls[1].messages).toEqual([
+      { role: "user", content: "بلیت چنده؟" },
+      { role: "assistant", content: "۱۵۰ هزار تومان." },
+      { role: "user", content: "دانشجویی هم داره؟" },
+    ]);
+  });
+
+  it("costs one model call and one reply when the webhook is delivered twice", async () => {
+    await withAssistant();
+    stubModel("یک جواب");
+    await runLabAction("ws", { action: "dm", text: "سلام" });
+    const job = state.jobs.find((j) => j.name === "process-message")!;
+    state.jobs.push({ ...job });
+    await drain();
+    expect(model.calls).toHaveLength(1);
+    expect(await texts()).toEqual(["یک جواب"]);
+  });
+
+  it("asks again on the job's retry when the provider was busy, instead of leaving them unanswered", async () => {
+    await withAssistant();
+    stubModel(429, "حالا جواب");
+    await runLabAction("ws", { action: "dm", text: "سلام" });
+    const job = state.jobs.find((j) => j.name === "process-message")!;
+    await expect(drain()).rejects.toThrow(/busy/);
+    state.jobs.push({ ...job }); // BullMQ retries the failed job
+    await drain();
+    expect(await texts()).toEqual(["حالا جواب"]);
+  });
+
+  it("stops answering one person at the daily limit", async () => {
+    await withAssistant(2);
+    stubModel("۱", "۲", "۳");
+    for (const text of ["الف", "ب", "پ"]) await act({ action: "dm", text });
+    expect(await texts()).toEqual(["۱", "۲"]);
+    expect(model.calls).toHaveLength(2);
   });
 });

@@ -160,6 +160,7 @@ model InstagramAccount {
   showcases            Showcase[]
   sequences            Sequence[]
   forms                Form[]
+  aiAssistant          AiAssistant?
   iceBreakers          IceBreaker[]
   /// Last time the welcome questions were pushed to Instagram, and the
   /// error if that push failed (Instagram keeps showing the old ones then).
@@ -739,4 +740,51 @@ model FormSubmission {
 
   @@index([formId, status])
   @@index([igsid, status])
+}
+
+/// The AI assistant of one Instagram account: answers DMs nothing else
+/// answered, from its persona and knowledge base.
+model AiAssistant {
+  id                  String   @id @default(cuid())
+  instagramAccountId  String   @unique
+  enabled             Boolean  @default(false)
+  /// ANTHROPIC | OPENAI (any OpenAI-compatible endpoint)
+  provider            String   @default("ANTHROPIC")
+  model               String
+  /// For OPENAI: the API base, e.g. https://api.openai.com/v1
+  baseUrl             String?
+  /// Encrypted with the same key as Instagram tokens.
+  apiKey              String
+  persona             String   @default("")
+  /// 1 formal … 4 friendly
+  tone                Int      @default(2)
+  knowledge           String   @default("")
+  /// Most AI replies one person gets per day; past it, they get none.
+  dailyLimitPerPerson Int      @default(20)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  replies          AiReply[]
+}
+
+/// One AI answer to one message. Claimed (unique trigger) before the model is
+/// called, so a redelivered webhook costs no second call and sends no second
+/// reply. The rows of a person are also the conversation the model sees.
+model AiReply {
+  id          String   @id @default(cuid())
+  assistantId String
+  igsid       String
+  triggerId   String
+  question    String
+  answer      String?
+  /// PENDING | SENT | FAILED | UNCONFIRMED
+  status      String   @default("PENDING")
+  error       String?
+  createdAt   DateTime @default(now())
+
+  assistant AiAssistant @relation(fields: [assistantId], references: [id], onDelete: Cascade)
+
+  @@unique([assistantId, triggerId])
+  @@index([assistantId, igsid, createdAt])
 }

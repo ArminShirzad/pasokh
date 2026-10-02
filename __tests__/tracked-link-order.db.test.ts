@@ -320,7 +320,7 @@ describe.skipIf(!DATABASE_URL)("tracked link order on a real Postgres", () => {
           [SECOND, "Read the guide"],
         ]);
       }
-    });
+    }, 30_000); // many copies and edits on Postgres; over 5 s when the whole suite runs at once
 
     it("keeps order for links an older build writes while a deploy rolls out", async () => {
       // An older build does not know about position, so its two links land
