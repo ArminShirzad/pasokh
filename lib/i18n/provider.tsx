@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useMemo } from "react";
 import { createI18n, type Locale } from "./index";
 
-// Shared components on the English marketing pages work without a provider.
+// Every page sits under a provider; this default only covers a component
+// rendered outside one (tests, error boundaries), and English is the source.
 const I18nContext = createContext(createI18n("en"));
 
 export function I18nProvider({
@@ -15,17 +16,16 @@ export function I18nProvider({
 }) {
   const value = useMemo(() => createI18n(locale), [locale]);
 
+  // The root layout sets lang and dir on the server; this keeps them right
+  // after a client-side language switch without a full reload.
   useEffect(() => {
-    const previous = document.documentElement.lang;
     document.documentElement.lang = locale;
-    return () => {
-      document.documentElement.lang = previous;
-    };
-  }, [locale]);
+    document.documentElement.dir = value.dir;
+  }, [locale, value.dir]);
 
   return (
     <I18nContext.Provider value={value}>
-      <div lang={locale} className="contents">
+      <div lang={locale} dir={value.dir} className="contents">
         {children}
       </div>
     </I18nContext.Provider>

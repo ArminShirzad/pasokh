@@ -136,7 +136,7 @@ export default function OverviewPage() {
             <select
               value={count}
               onChange={(e) => handleCountChange(e.target.value)}
-              className="border-0 bg-transparent py-2 pr-1 text-sm text-foreground outline-none"
+              className="border-0 bg-transparent py-2 pe-1 text-sm text-foreground outline-none"
             >
               {COUNT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -200,15 +200,15 @@ export default function OverviewPage() {
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500 border-b border-border">
-                  <th className="py-2 pr-4 font-medium">{t("Post")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Views")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Reach")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Likes")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Comments")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Saved")}</th>
-                  <th className="py-2 px-3 font-medium text-right">{t("Shares")}</th>
-                  <th className="py-2 pl-3 font-medium text-right">{t("Date")}</th>
+                <tr className="text-start text-xs uppercase tracking-wide text-zinc-500 border-b border-border">
+                  <th className="py-2 pe-4 font-medium">{t("Post")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Views")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Reach")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Likes")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Comments")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Saved")}</th>
+                  <th className="py-2 px-3 font-medium text-end">{t("Shares")}</th>
+                  <th className="py-2 ps-3 font-medium text-end">{t("Date")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,7 +217,7 @@ export default function OverviewPage() {
                     key={p.id}
                     className="border-b border-border last:border-0"
                   >
-                    <td className="py-3 pr-4 max-w-xs">
+                    <td className="py-3 pe-4 max-w-xs">
                       {p.permalink ? (
                         <a
                           href={p.permalink}
@@ -233,25 +233,25 @@ export default function OverviewPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.views, locale)}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.reach, locale)}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.likes, locale)}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.comments, locale)}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.saved, locale)}
                     </td>
-                    <td className="py-3 px-3 text-right text-muted">
+                    <td className="py-3 px-3 text-end text-muted">
                       {formatNumber(p.shares, locale)}
                     </td>
-                    <td className="py-3 pl-3 text-right text-zinc-500">
+                    <td className="py-3 ps-3 text-end text-zinc-500">
                       {formatDate(p.timestamp, locale)}
                     </td>
                   </tr>

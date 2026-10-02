@@ -506,7 +506,7 @@ export default function CampaignsPage() {
 
               {/* Actions */}
               <div
-                className="ml-auto flex items-center gap-2"
+                className="ms-auto flex items-center gap-2"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Copy reel URL */}
@@ -529,7 +529,7 @@ export default function CampaignsPage() {
                   <span
                     className={`
                       absolute top-1 w-4 h-4 rounded-full bg-white transition-transform shadow-sm
-                      ${auto.isActive ? "left-6" : "left-1"}
+                      ${auto.isActive ? "start-6" : "start-1"}
                     `}
                   />
                 </button>
@@ -551,10 +551,10 @@ export default function CampaignsPage() {
                         className="fixed inset-0 z-10"
                         onClick={() => setMenuOpenId(null)}
                       />
-                      <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+                      <div className="absolute end-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
                         <button
                           onClick={() => void duplicateAutomation(auto.id)}
-                          className="block w-full px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
+                          className="block w-full px-3 py-2 text-start text-sm text-foreground hover:bg-surface-hover"
                         >
                           {t("Duplicate")}
                         </button>
@@ -563,7 +563,7 @@ export default function CampaignsPage() {
                             setMenuOpenId(null);
                             void deleteAutomation(auto.id);
                           }}
-                          className="block w-full px-3 py-2 text-left text-sm text-error hover:bg-surface-hover"
+                          className="block w-full px-3 py-2 text-start text-sm text-error hover:bg-surface-hover"
                         >
                           {t("Delete")}
                         </button>

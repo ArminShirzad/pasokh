@@ -4,7 +4,7 @@ import Link from "next/link";
 export async function generateMetadata() {
   const { t } = await getI18n();
   return {
-    title: t("Check your email - OpenReply"),
+    title: t("Check your email - Pasokh"),
     description: t("A sign-in link was sent to your email."),
   };
 }
@@ -16,7 +16,7 @@ export default async function VerifyRequestPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-semibold text-foreground">
-            OpenReply
+            {t("Pasokh")}
           </h1>
         </div>
 

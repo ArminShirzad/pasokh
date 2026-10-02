@@ -207,7 +207,7 @@ function PostScreen({
       <div className="flex items-center gap-2 px-3 py-1.5">
         <Avatar url={avatarUrl} size={30} />
         <span className="text-sm font-semibold">{username}</span>
-        <span className="ml-auto tracking-widest">···</span>
+        <span className="ms-auto tracking-widest">···</span>
       </div>
       <div className="min-h-0 flex-1 bg-zinc-800">
         {postThumb && (
@@ -218,7 +218,7 @@ function PostScreen({
         <span className="flex items-center gap-1">{Ico.heart("h-6 w-6")}<span className="text-sm">59</span></span>
         <span className="flex items-center gap-1">{Ico.comment("h-6 w-6")}<span className="text-sm">1</span></span>
         {Ico.share("h-6 w-6")}
-        <span className="ml-auto">{Ico.bookmark("h-6 w-6")}</span>
+        <span className="ms-auto">{Ico.bookmark("h-6 w-6")}</span>
       </div>
       <div className="shrink-0 px-3 text-xs leading-relaxed">
         <p className="line-clamp-2">
@@ -277,7 +277,7 @@ function CommentsScreen({
         </div>
 
         {publicReplyEnabled && (
-          <div className="mt-4 flex gap-3 pl-10">
+          <div className="mt-4 flex gap-3 ps-10">
             <Avatar url={avatarUrl} size={28} />
             <div className="flex-1">
               <p className="text-xs">
@@ -357,7 +357,7 @@ function DmScreen({
         <span className="w-4">{Ico.back("h-5 w-5")}</span>
         <Avatar url={avatarUrl} size={30} />
         <span className="text-sm font-semibold">{username}</span>
-        <span className="ml-auto flex items-center gap-3">
+        <span className="ms-auto flex items-center gap-3">
           {Ico.phone("h-5 w-5")}
           {Ico.video("h-5 w-5")}
         </span>
@@ -366,7 +366,7 @@ function DmScreen({
       <div className="flex-1 space-y-3 px-3 py-4">
         {inboundMessage !== undefined && (
           <div className="flex justify-end">
-            <div className="max-w-[80%] rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
+            <div className="max-w-[80%] rounded-2xl rounded-ee-md bg-accent px-3 py-2 text-sm">
               {inboundMessage || t("their message")}
             </div>
           </div>
@@ -375,7 +375,7 @@ function DmScreen({
           <>
             <div className="flex items-end gap-2">
               <Avatar url={avatarUrl} size={24} />
-              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-bl-md bg-zinc-800">
+              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-es-md bg-zinc-800">
                 <p className="whitespace-pre-wrap px-3 py-2 text-sm">{openingDmMessage || t("Your opening message…")}</p>
                 <div className="mx-1.5 mb-1.5 rounded-xl bg-zinc-700 px-4 py-1.5 text-center text-sm font-medium text-white">
                   {openingDmButtonLabel || t("Button label")}
@@ -383,7 +383,7 @@ function DmScreen({
               </div>
             </div>
             <div className="flex justify-end">
-              <div className="rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
+              <div className="rounded-2xl rounded-ee-md bg-accent px-3 py-2 text-sm">
                 {openingDmButtonLabel || t("Button label")}
               </div>
             </div>
@@ -393,7 +393,7 @@ function DmScreen({
           <>
             <div className="flex items-end gap-2">
               <Avatar url={avatarUrl} size={24} />
-              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-bl-md bg-zinc-800">
+              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-es-md bg-zinc-800">
                 <p className="whitespace-pre-wrap px-3 py-2 text-sm">
                   {followPromptMessage ||
                     "quick favor before i send your link. i don't make any money from this, it's free. if you want to support me, just don't unfollow after, and star the repo on github if it helps you. tap the button once you're following and i'll send it over"}
@@ -404,7 +404,7 @@ function DmScreen({
               </div>
             </div>
             <div className="flex justify-end">
-              <div className="rounded-2xl rounded-br-md bg-accent px-3 py-2 text-sm">
+              <div className="rounded-2xl rounded-ee-md bg-accent px-3 py-2 text-sm">
                 {followPromptButtonLabel || "i'm following"}
               </div>
             </div>
@@ -420,7 +420,7 @@ function DmScreen({
           return (
             <div className="flex items-end gap-2">
               <Avatar url={avatarUrl} size={24} />
-              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-bl-md bg-zinc-800">
+              <div className="max-w-[80%] overflow-hidden rounded-2xl rounded-es-md bg-zinc-800">
                 {(!showCard || bodyText) && (
                   <p className="whitespace-pre-wrap px-3 py-2 text-sm">
                     {!revealMessage
@@ -455,7 +455,7 @@ function DmScreen({
             )}
             <div className="flex items-end gap-2">
               <Avatar url={avatarUrl} size={24} />
-              <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-zinc-800 px-3 py-2">
+              <div className="max-w-[80%] rounded-2xl rounded-es-md bg-zinc-800 px-3 py-2">
                 <p className="whitespace-pre-wrap text-sm">
                   {followUpMessage.trim()
                     ? followUpMessage.replace(/\{username\}/g, SAMPLE_USER)

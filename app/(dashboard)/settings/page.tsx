@@ -302,6 +302,7 @@ export default function SettingsPage() {
           >
             <input
               type="email"
+              dir="ltr"
               value={inviteEmail}
               onChange={(event) => setInviteEmail(event.target.value)}
               placeholder="teammate@agency.com"

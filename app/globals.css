@@ -1,7 +1,16 @@
 @import "tailwindcss";
 
-/* ManyChat Alternative — Design System
-   Plain and functional. No gradients, glass, glow, or animation. */
+/* Pasokh design system — plain and functional. No gradients, glass, glow, or
+   animation. Vazirmatn carries both Persian and Latin glyphs, so one family
+   serves both interface languages. */
+
+@font-face {
+  font-family: "Vazirmatn";
+  src: url("/fonts/vazirmatn-wght.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 @theme inline {
   --color-background: #ffffff;
@@ -16,7 +25,7 @@
   --color-success: #16a34a;
   --color-error: #dc2626;
   --color-warning: #d97706;
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Vazirmatn", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, monospace;
 }
 
@@ -105,4 +114,4 @@ select:focus-visible {
   font-style: normal;
   font-display: swap;
 }
-.zernio-sponsor { font-family: 'Zernio Geist', sans-serif; }
+.zernio-sponsor { font-family: 'Zernio Geist', 'Vazirmatn', sans-serif; }

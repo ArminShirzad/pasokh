@@ -280,7 +280,7 @@ export default function InboxPage() {
         {/* Conversation list. On mobile it takes the full pane and is hidden
             once a thread is open (ManyChat-style); on sm+ it is always shown. */}
         <div
-          className={`min-h-0 flex-col border-b border-border sm:flex sm:border-b-0 sm:border-r ${
+          className={`min-h-0 flex-col border-b border-border sm:flex sm:border-b-0 sm:border-e ${
             active ? "hidden" : "flex"
           }`}
         >
@@ -302,7 +302,7 @@ export default function InboxPage() {
                     key={c.id}
                     type="button"
                     onClick={() => openConversation(c.id)}
-                    className={`block w-full border-b border-border px-4 py-3 text-left ${
+                    className={`block w-full border-b border-border px-4 py-3 text-start ${
                       isActive ? "bg-surface-hover" : "hover:bg-surface-hover"
                     }`}
                   >
@@ -345,7 +345,7 @@ export default function InboxPage() {
                 <button
                   type="button"
                   onClick={() => setActiveId(null)}
-                  className="-ml-1 rounded px-2 py-1 text-muted hover:text-foreground sm:hidden"
+                  className="-ms-1 rounded px-2 py-1 text-muted hover:text-foreground sm:hidden"
                   aria-label={t("Back to conversations")}
                 >
                   {t("Back")}

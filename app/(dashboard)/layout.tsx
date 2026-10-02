@@ -8,7 +8,7 @@ import { ensureWorkspaceForUser } from "@/lib/workspace";
 
 export async function generateMetadata() {
   const { t } = await getI18n();
-  return { title: t("OpenReply - Open source Instagram comment-to-DM automation") };
+  return { title: t("Pasokh - Open source Instagram comment-to-DM automation") };
 }
 
 export default async function DashboardLayout({

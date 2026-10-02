@@ -1,22 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Analytics } from "@vercel/analytics/next";
+import { getI18n } from "@/lib/i18n/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OpenReply - Open source Instagram comment-to-DM automation",
+  title: "Pasokh",
   description:
-    "A free, self-hosted ManyChat alternative. Send an Instagram DM automatically when someone comments a keyword on your post or reel, using the official Meta API.",
-  keywords: [
-    "instagram automation",
-    "comment to DM",
-    "instagram private replies",
-    "social commerce",
-    "manychat alternative",
-  ],
+    "Self-hosted, open-source Instagram DM and comment automation.",
+  // An instance is a private tool, not a site to index.
+  robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "OpenReply",
+    title: "Pasokh",
     statusBarStyle: "black-translucent",
   },
   icons: {
@@ -37,20 +32,22 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // lang and dir are set on the server so a Persian page renders right-to-left
+  // from the first byte instead of flipping after hydration.
+  const { locale, dir } = await getI18n();
   return (
-    <html lang="en" className="h-full dark">
+    <html lang={locale} dir={dir} className="h-full dark">
       <body
         className="min-h-full bg-background text-foreground font-sans antialiased"
         // Clears the home indicator when installed; 0 everywhere else.
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {children}
-        <Analytics />
       </body>
     </html>
   );

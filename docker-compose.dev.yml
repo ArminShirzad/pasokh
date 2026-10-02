@@ -1,0 +1,49 @@
+# Pasokh: services for local development (`npm run dev` + `npm run worker` on
+# the host). Not the install file; end users use docker-compose.yml.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# Ports are offset from the defaults (55432, 56379) so they do not collide with
+# a Postgres or Redis another project already runs on this machine.
+
+name: pasokh-dev
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pasokh
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Catches magic-link emails: http://localhost:58025
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:58025:8025"
+      - "127.0.0.1:58125:1025"
+
+volumes:
+  pgdata:
+  redisdata:

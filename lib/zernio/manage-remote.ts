@@ -34,7 +34,7 @@ export async function ensureWebhook({ apiKey, workspaceId, secret, baseUrl, webh
   const url = webhookUrl({ baseUrl, workspaceId });
   const webhooks = await listWebhooks(apiKey);
   const existing = webhooks.find(w => w._id === webhookId) ?? webhooks.find(w => w.url === url);
-  const body = { name: 'OpenReply', url, secret, events: EVENTS, isActive: true };
+  const body = { name: 'Pasokh', url, secret, events: EVENTS, isActive: true };
   if (existing) {
     await zernioRequest({ apiKey, path: '/webhooks/settings', method: 'PUT', body: { ...body, _id: existing._id } });
     return existing._id;

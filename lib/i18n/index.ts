@@ -1,15 +1,31 @@
-import zhTW from "./zh-TW.json";
+import fa from "./fa.json";
 
-export const LOCALE_COOKIE = "openreply-locale";
-export type Locale = "en" | "zh-TW";
-export type MessageKey = keyof typeof zhTW;
+export const LOCALE_COOKIE = "pasokh-locale";
+export const LOCALES = ["fa", "en"] as const;
+export type Locale = (typeof LOCALES)[number];
+// English is the source language: keys are the English copy, fa.json maps
+// each one to Persian.
+export type MessageKey = keyof typeof fa;
 
 export function isLocale(value: unknown): value is Locale {
-  return value === "en" || value === "zh-TW";
+  return LOCALES.includes(value as Locale);
+}
+
+/**
+ * The instance default, set by the installer (DEFAULT_LOCALE). Persian unless
+ * configured otherwise: Pasokh is built for Persian-speaking businesses first.
+ */
+export function defaultLocale(): Locale {
+  const configured = process.env.DEFAULT_LOCALE;
+  return isLocale(configured) ? configured : "fa";
 }
 
 export function resolveLocale(value: unknown): Locale {
-  return isLocale(value) ? value : "en";
+  return isLocale(value) ? value : defaultLocale();
+}
+
+export function localeDirection(locale: Locale): "rtl" | "ltr" {
+  return locale === "fa" ? "rtl" : "ltr";
 }
 
 type Placeholders<S extends string> =
@@ -53,7 +69,7 @@ const labels: Record<string, StaticMessageKey> = {
 
 export function createI18n(locale: Locale) {
   function t<K extends MessageKey>(key: K, ...args: MessageArgs<K>): string {
-    const message = locale === "zh-TW" ? zhTW[key] : key;
+    const message = locale === "fa" ? fa[key] : key;
     const values = args[0] as Record<string, string | number> | undefined;
     return message.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
       values?.[name] === undefined ? placeholder : String(values[name]),
@@ -62,6 +78,7 @@ export function createI18n(locale: Locale) {
 
   return {
     locale,
+    dir: localeDirection(locale),
     t,
     label: (value: string) =>
       Object.hasOwn(labels, value) ? t(labels[value]) : value,

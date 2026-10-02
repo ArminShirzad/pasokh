@@ -145,22 +145,22 @@ export default function FollowerChart({
         <div className="mt-4 max-h-72 overflow-y-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-zinc-500">
-                <th className="py-2 pr-4 font-medium">{t("Date")}</th>
-                <th className="py-2 px-3 font-medium text-right">{t("Followers")}</th>
-                <th className="py-2 pl-3 font-medium text-right">{t("Change")}</th>
+              <tr className="border-b border-border text-start text-xs uppercase tracking-wide text-zinc-500">
+                <th className="py-2 pe-4 font-medium">{t("Date")}</th>
+                <th className="py-2 px-3 font-medium text-end">{t("Followers")}</th>
+                <th className="py-2 ps-3 font-medium text-end">{t("Change")}</th>
               </tr>
             </thead>
             <tbody>
               {[...data].reverse().map((p) => (
                 <tr key={p.date} className="border-b border-border last:border-0">
-                  <td className="py-2 pr-4 text-foreground">
+                  <td className="py-2 pe-4 text-foreground">
                     {formatDay(p.date, locale)}
                   </td>
-                  <td className="py-2 px-3 text-right text-muted">
+                  <td className="py-2 px-3 text-end text-muted">
                     {p.followers.toLocaleString(locale)}
                   </td>
-                  <td className="py-2 pl-3 text-right text-muted">
+                  <td className="py-2 ps-3 text-end text-muted">
                     {p.delta === null ? "—" : formatSigned(p.delta, locale)}
                   </td>
                 </tr>
