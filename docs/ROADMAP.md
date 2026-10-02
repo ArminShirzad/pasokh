@@ -132,6 +132,11 @@ Each phase lists what "done" means.
 - Password login + first-run setup; installer; GHCR images; Caddy / tunnel modes.
 - Done when: clean VPS → installer → Persian UI → Zernio connected → a comment
   from a non-follower gets the text reply, and the link after they answer.
+- Status 2026-10-02: built and tested locally (installer end to end in
+  quick-tunnel mode on Docker Desktop; 370 tests including database suites).
+  Not yet done: publishing the repository and first image (v0.1.0); a run on
+  a real Linux VPS; a real Instagram account through Zernio; legal pages and
+  campaign templates still carry OpenReply's English copy.
 
 ### P1 Message engine
 - `ResponseBlock`, `MediaAsset`, `Contact`, `ConversationSession`.
