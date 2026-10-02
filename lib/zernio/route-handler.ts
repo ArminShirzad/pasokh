@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Prisma } from '@/app/generated/prisma/client';
+import { getBaseUrl } from '@/lib/env';
 import { MetaApiError } from '@/lib/meta/client';
 import { canManageWorkspace, getCurrentWorkspaceContext, type WorkspaceContext } from '@/lib/workspace-access';
 
@@ -16,7 +17,10 @@ export function withZernioManagement(handler: (context: WorkspaceContext, reques
       if (!canManageWorkspace(context.role)) throw new ConnectionError('Only workspace owners and admins can manage the Zernio connection.', 403);
       if (request.method !== 'GET') {
         const origin = request.headers.get('origin');
-        if (origin && origin !== new URL(request.url).origin) throw new ConnectionError('Invalid request origin.', 403);
+        // Behind a TLS-terminating proxy or tunnel request.url is http:// while the browser sends
+        // https://, so also accept the configured public origin (NEXTAUTH_URL).
+        const trusted = [new URL(request.url).origin, new URL(getBaseUrl()).origin];
+        if (origin && !trusted.includes(origin)) throw new ConnectionError('Invalid request origin.', 403);
       }
       return await handler(context, request);
     } catch (error) {
