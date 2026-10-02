@@ -1,7 +1,8 @@
 {
-  "name": "openreply",
+  "name": "pasokh",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

@@ -1,0 +1,13 @@
+Pasokh (پاسخ)
+Copyright (C) 2026 Armin Shirzad and Pasokh contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3. See LICENSE.
+
+Pasokh is a fork of OpenReply (https://github.com/diwenne/openreply), which is
+itself derived from instagram-comment-to-dm
+(https://github.com/im-anishraj/instagram-comment-to-dm). Code taken from those
+projects remains available under the MIT License; its copyright notice and
+permission notice are kept in LICENSE-OPENREPLY-MIT, as that license requires.
+Changes and additions made in Pasokh are licensed under AGPL-3.0.

@@ -1,0 +1,185 @@
+# Pasokh (پاسخ) roadmap
+
+Pasokh is a self-hosted, open-source Instagram DM and comment automation
+platform, Persian and English, with the feature set of paid Iranian services
+such as Directam. It is a hard fork of [OpenReply](https://github.com/diwenne/openreply)
+(MIT), relicensed as AGPL-3.0 for new work.
+
+This file is the plan of record. Each phase ends in a release that someone can
+install and use; nothing is "done" until it works through the installer on a
+clean machine.
+
+## Feature target
+
+Measured against Directam's dashboard and app bundles on 2026-10-02 (read-only
+review of a live account).
+
+| Area | Directam feature | Pasokh phase |
+|---|---|---|
+| Smart reply (پاسخ هوشمند) | DM keyword triggers (exact / contains), story-scoped triggers, auto-like the trigger, responses of text / voice / image / video / cards, quick-reply buttons that chain into other commands | P2 |
+| Comment & live (کامنت و لایو هوشمند) | Per-post or all-post, keyword or any comment, random public-reply variants (min 3, anti-spam), DM with rich responses, follow gate with re-check button, AI reply, live comments → DM | P3 (live: Meta only) |
+| Showcase (ویترین‌ساز) | Product carousel in DM: image, title, description, buttons per card | P4 |
+| Welcome message (پیام خوش‌آمدگویی) | Up to 4 ice breakers on a first DM, each linked to a reply | P4 |
+| Smart support (پشتیبان هوشمند) | Drip: after a trigger, N messages with minute / hour delays | P5 |
+| Form builder (فرم‌ساز) | Conversational form: ordered questions, optional choices, cancel word, completion / cancel messages, results with duplicate filter, Excel export | P6 |
+| AI | Persona, tone (4 levels), knowledge base; comment and DM replies | P7 |
+| Smart SMS (پیامک هوشمند) | Phone capture, contact list import / export, bulk SMS | P8 |
+| Already in OpenReply | Inbox, tracked links + click stats, DM logs, workspaces and roles, follower history | kept |
+
+## Provider support
+
+Both providers sit behind one interface (`lib/instagram/*`). Zernio events are
+normalised into Meta's webhook shape (`lib/zernio/normalize-event.ts`), so the
+engine sees one event stream. Every new capability ships for both, except where
+a provider cannot do it.
+
+| Capability | Zernio | Meta (own app) |
+|---|---|---|
+| Text, buttons (≤3), quick replies (≤13) | yes | yes |
+| Image / video / audio / file | `attachmentUrl` + `attachmentType` | `attachment.type` |
+| Cards / carousel (≤10) | `template.generic` | generic template |
+| Story reply / story mention events | `metadata.storyReply`, `isStoryMention` | `reply_to.story`, `story_mention` attachment |
+| React to a message | `/reactions` (any emoji) | `sender_action: react` (heart) |
+| Ice breakers | `/instagram-ice-breakers` | `messenger_profile.ice_breakers` |
+| Active stories list | `/instagram/stories` | `/{ig-id}/stories` |
+| Live-video comments | **no** | `live_comments` webhook field |
+| Follow status | consent-gated, often unknown | consent-gated, often unknown |
+
+Zernio is the default for beginners (no Meta app review). Meta is for people who
+need live comments or want no per-account fee.
+
+### Platform constraint that shapes the design
+
+Since late August 2026 Instagram refuses buttons, cards and attachments in a
+comment private reply to someone who does not follow the account (Meta code 2,
+subcode 1545133), and the refused call still consumes the comment's single
+private reply. Source: Zernio's private-reply docs, read 2026-10-02.
+
+So the comment path is always: **plain-text private reply → user answers → full
+rich flow in the open DM thread.** OpenReply sends a button in the private
+reply today, which this breaks for exactly the people the follow gate targets.
+Fixed in P0.
+
+## Architecture changes
+
+### Message engine (P1)
+
+One ordered list of `ResponseBlock`s is the unit everything sends: commands,
+campaigns, sequences, forms, ice breakers.
+
+```
+ResponseBlock  type TEXT | IMAGE | VIDEO | AUDIO | FILE | CARDS | AI
+               text, mediaAssetId, buttons[], quickReplies[], cards[], delayMs
+MediaAsset     uploaded file on a local volume, served at /media/<unguessable id>
+               (providers fetch attachments by public URL)
+Contact        one per (account, IGSID): username, name, phone, tags, firstSeen,
+               lastInboundAt (drives the 24-hour window)
+ConversationSession  per contact: what the next inbound message means
+               (awaiting comment follow-up, form step N, …), expiresAt
+```
+
+Inbound DM routing order: active session → quick-reply / postback payload →
+story reply / mention → keyword commands → any-DM fallback.
+
+### Commands (P2)
+
+```
+Command         name, isActive, likeTrigger, followGate, responses[]
+CommandTrigger  type DM_KEYWORD | STORY_REPLY | STORY_MENTION | COMMENT | LIVE_COMMENT
+                | QUICK_REPLY | ICE_BREAKER | ANY_DM, keywords[], matchMode, postId?, storyId?
+```
+
+Existing campaigns (`Automation`) keep their production-tested delivery code
+(one private reply per comment, unconfirmed-delivery handling, follow re-checks)
+and gain "then run command X" for the rich part.
+
+### Delivery guarantees kept from OpenReply
+
+Every new send path reuses: idempotency keys, durable claims
+(`PostbackDelivery`-style), `dmDeliveryUnconfirmed` (never auto-resend an
+ambiguous send), per-account rate limiting (750/hour), and a DM log row per
+outcome with a reason.
+
+## Install experience (P0, then kept working every phase)
+
+Target user: has a VPS and has never used Docker.
+
+1. **One command**: `curl -fsSL …/install.sh | bash` (and `install.ps1`). Checks
+   Docker, writes `.env` with generated secrets, asks three questions
+   (language; public URL mode; admin email), starts the stack, prints the URL.
+2. **Prebuilt images** on GHCR (amd64 + arm64) via GitHub Actions. No build on
+   the user's machine.
+3. **Public URL modes**: quick test tunnel (Cloudflare, URL changes on restart);
+   own domain with Caddy and automatic HTTPS; Cloudflare named tunnel token
+   (stable, no open ports).
+4. **No SMTP needed**: first-run setup page creates the admin with email +
+   password. Magic links stay optional.
+5. **Migrations run on start**; the Zernio webhook re-registers itself when the
+   public URL changes.
+6. **Docs in Persian and English**, including the Iran-specific facts: the server
+   must be outside Iran to reach Instagram and Zernio; Docker Hub / GHCR mirrors.
+
+## Phases
+
+Each phase lists what "done" means.
+
+### P0 Foundation (release v0.1)
+- AGPL-3.0 license, NOTICE crediting OpenReply (MIT), Pasokh branding,
+  remove OpenReply's sponsor / SEO marketing pages.
+- Persian locale (`fa.json`), RTL layout (`dir="rtl"`, Tailwind logical
+  properties), Vazirmatn font, Persian digits, Jalali dates.
+- Follow-gate fix: plain-text private reply, continue on the user's answer.
+- Password login + first-run setup; installer; GHCR images; Caddy / tunnel modes.
+- Done when: clean VPS → installer → Persian UI → Zernio connected → a comment
+  from a non-follower gets the text reply, and the link after they answer.
+
+### P1 Message engine
+- `ResponseBlock`, `MediaAsset`, `Contact`, `ConversationSession`.
+- Provider send API for text / media / cards / buttons / quick replies on
+  Zernio and Meta; webhook parsing of quick-reply payloads, story replies,
+  story mentions, attachments, reactions.
+- **Simulator**: a dev-only page that injects fake comment / DM / tap events, so
+  flows can be tested without Instagram (also used by e2e tests).
+- Done when: every block type delivers through both providers in the simulator,
+  and through Zernio on a real account.
+
+### P2 Smart reply (commands)
+- Command + triggers, exact / contains, story picker, quick-reply chaining,
+  auto-like, builder UI with phone preview, search, enable / disable.
+- Done when: the city-menu pattern (one command offers buttons, each button
+  runs another command) works end to end.
+
+### P3 Comment & live
+- Campaign → rich responses via command, any-comment, ≥3 public-reply variants
+  enforced when enabled, live comments (Meta provider).
+
+### P4 Showcase and welcome
+- Card / carousel builder; ice breakers synced to the account, each mapped to a
+  command.
+
+### P5 Smart support (sequences)
+- Trigger → N steps with delays; stops on reply (optional); respects the
+  24-hour window and says so in the UI when a step would fall outside it.
+
+### P6 Form builder and contacts
+- Conversational forms on `ConversationSession`; results table, duplicate
+  filter, CSV / Excel export; contacts page with tags and phone numbers.
+
+### P7 AI replies
+- Persona, tone, knowledge base; for comments and DMs. Providers: Anthropic
+  (Claude) and any OpenAI-compatible endpoint (covers Iranian gateways).
+
+### P8 SMS
+- Provider interface; Kavenegar, sms.ir, Melipayamak; bulk send to contacts;
+  phone capture via forms.
+
+### P9 Polish
+- Reports, ideas / templates gallery, docs site, demo video.
+
+## Conventions
+
+- Commit subjects state the finding, not the action.
+- Tests are named after the failure they prevent.
+- Every measured number carries its date and what it was measured against.
+- Feature parity with Directam, never its name, logo, copy, help texts or
+  example prompts.
