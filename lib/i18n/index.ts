@@ -69,7 +69,8 @@ const labels: Record<string, StaticMessageKey> = {
 
 export function createI18n(locale: Locale) {
   function t<K extends MessageKey>(key: K, ...args: MessageArgs<K>): string {
-    const message = locale === "fa" ? fa[key] : key;
+    // A key missing from fa.json renders in English rather than throwing.
+    const message = (locale === "fa" ? (fa as Record<string, string>)[key] : undefined) ?? key;
     const values = args[0] as Record<string, string | number> | undefined;
     return message.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
       values?.[name] === undefined ? placeholder : String(values[name]),

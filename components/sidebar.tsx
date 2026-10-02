@@ -8,6 +8,7 @@
 
 import LanguageSwitcher from "@/components/language-switcher";
 import { useI18n } from "@/lib/i18n/provider";
+import { signOutAction } from "@/lib/users/actions";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -50,7 +51,7 @@ export default function Sidebar({
           fixed top-0 start-0 z-50 h-dvh w-64 max-w-[85vw] shrink-0 bg-surface border-e border-border flex flex-col
           transition-transform duration-200 ease-out
           lg:h-full lg:translate-x-0 lg:static lg:z-auto
-          ${isOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"}
+          ${isOpen ? "translate-x-0" : "max-lg:-translate-x-full max-lg:rtl:translate-x-full"}
         `}
       >
         {/* Same reason as the top bar: the drawer is full height, so the
@@ -93,6 +94,11 @@ export default function Sidebar({
           <div className="mb-4"><LanguageSwitcher /></div>
           <p className="text-sm text-foreground truncate">{workspaceName}</p>
           <p className="text-xs text-muted">{t("Self-hosted")}</p>
+          <form action={signOutAction} className="mt-3">
+            <button type="submit" className="text-xs text-muted underline-offset-4 hover:text-foreground hover:underline">
+              {t("Sign out")}
+            </button>
+          </form>
         </div>
       </aside>
     </>

@@ -5,15 +5,11 @@ import { useState } from "react";
 
 interface InvitationAcceptCardProps {
   token: string;
-  isSignedIn: boolean;
   invitedEmail: string;
 }
 
-export default function InvitationAcceptCard({
-  token,
-  isSignedIn,
-  invitedEmail,
-}: InvitationAcceptCardProps) {
+/** Shown to a signed-in user; signed-out invitees get a password form instead. */
+export default function InvitationAcceptCard({ token, invitedEmail }: InvitationAcceptCardProps) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -35,32 +31,20 @@ export default function InvitationAcceptCard({
     setBusy(false);
   }
 
-  if (!isSignedIn) {
-    return (
-      <a
-        href="/login"
-        className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-      >
-        {t("Sign in to accept")}
-      </a>
-    );
-  }
-
   return (
     <div className="space-y-3">
       <button
         type="button"
         onClick={acceptInvite}
         disabled={busy}
-        className="inline-flex items-center justify-center rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
+        className="inline-flex w-full items-center justify-center rounded bg-accent px-5 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50"
       >
         {busy ? t("Accepting...") : t("Accept invitation")}
       </button>
       {message && <p className="text-sm text-error">{message}</p>}
       <p className="text-xs text-muted">
-        {t("Use the magic link account for")} {invitedEmail}.
+        {t("Accept while signed in as {email}.", { email: invitedEmail })}
       </p>
     </div>
   );
 }
-
