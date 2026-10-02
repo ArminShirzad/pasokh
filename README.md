@@ -38,6 +38,9 @@ password.
   one place; every smart reply that shows one sends its current version.
 - **Welcome message**: up to four questions Instagram shows on a new chat,
   each answered by a smart reply; sent to Instagram from the dashboard.
+- **Smart support**: follow-up messages minutes, hours or days after a smart
+  reply, stopping when the person answers; the builder warns about any step
+  Instagram's 24-hour window would refuse.
 - **Test lab**: try every flow with a pretend follower, no Instagram needed;
   it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
@@ -46,8 +49,8 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): timed follow-up
-sequences; a conversational form builder; AI replies; SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): a conversational form
+builder; AI replies; SMS.
 
 ## Install
 

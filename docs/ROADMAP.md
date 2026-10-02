@@ -201,6 +201,17 @@ Each phase lists what "done" means.
 ### P5 Smart support (sequences)
 - Trigger → N steps with delays; stops on reply (optional); respects the
   24-hour window and says so in the UI when a step would fall outside it.
+- Status 2026-10-02: built. A sequence (up to 10 steps, each a message or
+  showcase after a delay of up to 7 days from the previous step) is started
+  by a smart reply once its messages are delivered; someone already part-way
+  through is not restarted. Each step is a delayed queue job; the step is
+  claimed before sending, a rate limit hands it back, and an ambiguous send
+  ends the run as UNCONFIRMED rather than retrying. Before sending it stops
+  if they replied (when chosen) or if the 24-hour window has closed. Measured
+  in the test lab with real BullMQ delays: steps of 1 and 2 minutes arrived
+  at 61 s and 181 s (2026-10-02, dev worker on Windows). The concurrent-
+  delivery claim is not exercised by a test (sequential redelivery is).
+  Campaigns reach a sequence through their smart reply.
 
 ### P6 Form builder and contacts
 - Conversational forms on `ConversationSession`; results table, duplicate
