@@ -171,6 +171,16 @@ Each phase lists what "done" means.
 ### P3 Comment & live
 - Campaign → rich responses via command, any-comment, ≥3 public-reply variants
   enforced when enabled, live comments (Meta provider).
+- Status 2026-10-02: built. A campaign can hand off to a smart reply: its
+  comment reply is text (a button for confirmed followers), and the answer,
+  tap or passed follow gate runs the command in the DM, once per trigger.
+  Public replies need three different wordings and never repeat the last one
+  (campaigns saved before keep working until edited). `live_comments` webhooks
+  reach live campaigns only, with no public reply; Zernio accounts cannot pick
+  live. Proven in the test lab, which now has a live video, and in a database
+  test that runs the real worker. Not yet verified: Meta's `live_comments`
+  delivery and private replies during a real broadcast. Any-comment existed
+  already (OpenReply's "any word").
 
 ### P4 Showcase and welcome
 - Card / carousel builder; ice breakers synced to the account, each mapped to a

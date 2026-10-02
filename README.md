@@ -24,21 +24,27 @@ password.
 
 ## What it does today
 
-- **Comment → DM**: keywords per post, any post, or the next reel you publish;
-  whole-word or partial match; Persian and English text.
-- **Public reply** under the comment, picked at random from several variants.
+- **Comment → DM**: keywords per post, any post, the next reel you publish,
+  or your live videos (Meta connection); whole-word or partial match; Persian
+  and English text.
+- **Public reply** under the comment, from at least three wordings, never the
+  same one twice in a row.
 - **Follow gate**: the link is sent only after they follow.
-- **DM and story-reply triggers**: the same keywords work in DMs.
+- **Smart reply**: DM and story-reply keywords (exact or contained), replies to
+  one specific story, story mentions; answers of text, image, video, voice,
+  file, or product cards, with buttons and quick-reply menus that open other
+  replies; a heart on their message. A comment campaign can hand off to one.
+- **Test lab**: try every flow with a pretend follower, no Instagram needed;
+  it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
 - **Inbox**: read and answer Instagram DMs from the dashboard.
 - **DM logs** with a reason for every send, skip and failure.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): rich replies with images,
-video, voice and product cards; chained quick-reply menus; story-specific
-triggers; welcome messages (ice breakers); timed follow-up sequences; a
-conversational form builder; AI replies; live-video comments; SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): welcome messages (ice
+breakers); timed follow-up sequences; a conversational form builder; AI
+replies; SMS.
 
 ## Install
 
@@ -119,7 +125,7 @@ an ambiguous API response is never retried into a duplicate DM.
 
 Possible and supported side by side with Zernio; it needs a Meta developer
 app, business verification and app review. See [docs/setup.md](docs/setup.md).
-Live-video comments will need this route.
+Live-video comments need this route: Zernio does not forward them.
 
 ## Credits and license
 
