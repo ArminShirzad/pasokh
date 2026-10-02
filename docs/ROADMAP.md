@@ -162,6 +162,11 @@ Each phase lists what "done" means.
   auto-like, builder UI with phone preview, search, enable / disable.
 - Done when: the city-menu pattern (one command offers buttons, each button
   runs another command) works end to end.
+- Status 2026-10-02: built; the city menu runs end to end in the test lab
+  (exact match with an Arabic-keyboard spelling, heart, personalised quick
+  replies, a tap delivering cards). Commands without keywords are menu items.
+  Not yet verified on a real account, including the story picker against
+  Meta's and Zernio's story endpoints.
 
 ### P3 Comment & live
 - Campaign → rich responses via command, any-comment, ≥3 public-reply variants
