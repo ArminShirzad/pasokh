@@ -265,6 +265,15 @@ Each phase lists what "done" means.
 
 ### P9 Polish
 - Reports, ideas / templates gallery, docs site, demo video.
+- Status 2026-10-03: built. Reports: 30 days of new contacts, campaign
+  DMs, smart replies, AI replies, forms completed, sequences started, SMS
+  and link clicks, counted by day in the instance's time zone (Asia/Tehran
+  by default, REPORT_TIMEZONE to change). Templates: branches menu, price
+  carousel, DM sign-up, follow-up, comment giveaway; every object created
+  paused, written in the instance language, and checked by the same rules
+  as hand-built ones. Docs: a user guide in Persian and English
+  (`docs/guide*.md`) rather than a separate site, and a demo video script
+  (`docs/demo-script.md`); the video itself is still to be recorded.
 
 ## Conventions
 

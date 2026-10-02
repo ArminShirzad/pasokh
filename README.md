@@ -62,8 +62,8 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): reports, a templates
-gallery, a docs site.
+Also: a **templates** gallery (ready-made setups, created paused), a
+**reports** page, and a [user guide](docs/guide.md) ([Persian](docs/guide.fa.md)).
 
 ## Install
 
