@@ -1,5 +1,6 @@
 import * as meta from "@/lib/meta/client";
 import { zernioRequest } from "@/lib/zernio/client";
+import * as sim from "@/lib/simulator/provider";
 import type { InstagramContext } from "./context";
 
 type Comment = {
@@ -21,6 +22,7 @@ export async function getRecentMediaComments({
   sinceMs: number;
   max?: number;
 }): Promise<meta.InstagramComment[]> {
+  if (context.provider === "SIMULATOR") return sim.simulatorComments(context, mediaId, sinceMs);
   if (context.provider === "META")
     return meta.getRecentMediaComments(
       context.accessToken,
@@ -69,6 +71,7 @@ export async function getUserMedia({
   context: InstagramContext;
   limit?: number;
 }): Promise<meta.InstagramMedia[]> {
+  if (context.provider === "SIMULATOR") return sim.SIM_POSTS.slice(0, limit);
   if (context.provider === "META")
     return meta.getUserMedia(context.accessToken, limit);
   const result = await zernioRequest<{
@@ -125,6 +128,7 @@ export async function getUserInfo({
 }: {
   context: InstagramContext;
 }): Promise<meta.InstagramUser> {
+  if (context.provider === "SIMULATOR") return sim.simulatorUser(context);
   if (context.provider === "META") return meta.getUserInfo(context.accessToken);
   const result = await zernioRequest<{
     accounts: {

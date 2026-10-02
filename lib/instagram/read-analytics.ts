@@ -1,5 +1,6 @@
 import * as meta from "@/lib/meta/client";
 import { zernioRequest } from "@/lib/zernio/client";
+import * as sim from "@/lib/simulator/provider";
 import type { InstagramContext, ZernioContext } from "./context";
 
 export async function getUserFollowStatus({
@@ -9,6 +10,7 @@ export async function getUserFollowStatus({
   context: InstagramContext;
   recipientId: string;
 }): Promise<boolean | null> {
+  if (context.provider === "SIMULATOR") return sim.simulatorFollowStatus(context, recipientId);
   if (context.provider === "META")
     return meta.getUserFollowStatus(context.accessToken, recipientId);
   try {
@@ -31,6 +33,7 @@ export async function getMediaInsights({
   mediaId: string;
   metrics: string[];
 }): Promise<meta.InstagramMediaInsights> {
+  if (context.provider === "SIMULATOR") return {};
   if (context.provider === "META")
     return meta.getMediaInsights(context.accessToken, mediaId, metrics);
   const result = await zernioRequest<{

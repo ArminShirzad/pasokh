@@ -150,6 +150,8 @@ model InstagramAccount {
   followerSnapshots FollowerSnapshot[]
   conversationSessions ConversationSession[]
   contacts          Contact[]
+  simulatorEvents   SimulatorEvent[]
+  simulatorFans     SimulatorFan[]
 
   @@index([workspaceId])
 }
@@ -404,6 +406,9 @@ enum OperationalEventLevel {
 enum InstagramProvider {
   META
   ZERNIO
+  /// The built-in test lab: a fake account whose sends are recorded instead
+  /// of delivered (lib/simulator).
+  SIMULATOR
 }
 
 model ZernioConnection {
@@ -493,4 +498,36 @@ model MediaAsset {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, createdAt])
+}
+
+/// One line of a test-lab conversation: something the simulated person did
+/// ("in": comment, DM, tap) or something Pasokh sent ("out").
+model SimulatorEvent {
+  id                 String   @id @default(cuid())
+  instagramAccountId String
+  fanId              String
+  direction          String
+  kind               String
+  postId             String?
+  commentId          String?
+  body               Json
+  createdAt          DateTime @default(now())
+
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@index([instagramAccountId, createdAt])
+  @@index([commentId])
+}
+
+/// The simulated person on the other side of the test lab.
+model SimulatorFan {
+  id                 String  @id @default(cuid())
+  instagramAccountId String
+  igsid              String
+  username           String
+  follows            Boolean @default(false)
+
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([instagramAccountId, igsid])
 }

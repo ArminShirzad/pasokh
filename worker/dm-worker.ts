@@ -3,8 +3,13 @@ import { recordWorkerHeartbeat } from "@/lib/ops/worker-health";
 import { reconcileComments } from "@/lib/polling/comment-reconciler";
 import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
 import os from "node:os";
+import { existsSync } from "node:fs";
 import { getBaseUrl } from "@/lib/env";
 import { syncZernioWebhooks } from "@/lib/zernio/sync-webhooks";
+
+// Docker passes the environment in; a local checkout keeps it in .env.
+// (Imports above only read process.env when first used.)
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 const worker = createDMWorker();
 const startedAt = new Date().toISOString();

@@ -6,6 +6,7 @@ import {
   ZernioDeliveryUnconfirmedError,
 } from "@/lib/zernio/client";
 import type { InstagramContext, ZernioContext } from "./context";
+import * as sim from "@/lib/simulator/provider";
 import { toMetaMessage, toZernioBody, validateOutbound, type OutboundMessage } from "@/lib/messages/outbound";
 
 type Button =
@@ -105,6 +106,8 @@ export async function sendPrivateReply({
   message: string;
   postId?: string;
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({ context, recipient: { commentId, postId }, message: { type: "text", text: message } });
   if (context.provider === "META")
     return meta.sendPrivateReply(
       context.accessToken,
@@ -132,6 +135,12 @@ export async function sendPrivateReplyWithButton({
   payload: string;
   postId?: string;
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({
+      context,
+      recipient: { commentId, postId },
+      message: { type: "text", text, buttons: [{ type: "postback", title: buttonTitle.slice(0, 20), payload }] },
+    });
   if (context.provider === "META")
     return meta.sendPrivateReplyWithButton(
       context.accessToken,
@@ -165,6 +174,12 @@ export async function sendDirectMessageWithButton({
   buttonTitle: string;
   payload: string;
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({
+      context,
+      recipient: { userId },
+      message: { type: "text", text, buttons: [{ type: "postback", title: buttonTitle.slice(0, 20), payload }] },
+    });
   if (context.provider === "META")
     return meta.sendDirectMessageWithButton(
       context.accessToken,
@@ -197,6 +212,8 @@ export async function sendPrivateReplyWithLinkButton({
   buttons: meta.LinkButton[];
   postId?: string;
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({ context, recipient: { commentId, postId }, message: { type: "text", text, buttons: linkButtons(buttons) } });
   if (context.provider === "META")
     return meta.sendPrivateReplyWithLinkButton(
       context.accessToken,
@@ -225,6 +242,8 @@ export async function sendDirectMessage({
   userId: string;
   message: string;
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({ context, recipient: { userId }, message: { type: "text", text: message } });
   if (context.provider === "META")
     return meta.sendDirectMessage(
       context.accessToken,
@@ -248,6 +267,8 @@ export async function sendDirectMessageWithLinkButton({
   text: string;
   buttons: meta.LinkButton[];
 }) {
+  if (context.provider === "SIMULATOR")
+    return sim.simulatorSend({ context, recipient: { userId }, message: { type: "text", text, buttons: linkButtons(buttons) } });
   if (context.provider === "META")
     return meta.sendDirectMessageWithLinkButton(
       context.accessToken,
@@ -275,6 +296,7 @@ export async function sendCommentReply({
   message: string;
   postId?: string;
 }) {
+  if (context.provider === "SIMULATOR") return sim.simulatorCommentReply(context, commentId, message);
   if (context.provider === "META")
     return meta.sendCommentReply(context.accessToken, commentId, message);
   const result = await zernioRequest<{ data: { commentId: string } }>({
@@ -316,6 +338,7 @@ export async function sendOutboundMessage({
     // Neither API takes media or cards in a private reply.
     throw new Error("A private reply to a comment can only be text, with buttons or quick replies.");
   }
+  if (context.provider === "SIMULATOR") return sim.simulatorSend({ context, recipient, message });
   if (context.provider === "META") {
     return meta.sendMessage(
       context.accessToken,
@@ -349,6 +372,10 @@ export async function reactToMessage({
   userId: string;
   messageId: string;
 }): Promise<void> {
+  if (context.provider === "SIMULATOR") {
+    await sim.simulatorReact(context, userId, messageId);
+    return;
+  }
   if (context.provider === "META") {
     await meta.reactToMessage(context.accessToken, instagramAccountId, userId, messageId);
     return;
