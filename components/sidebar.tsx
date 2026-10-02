@@ -15,6 +15,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
   { label: "Overview", href: "/overview" },
+  { label: "Reports", href: "/reports" },
   { label: "Inbox", href: "/inbox" },
   { label: "Campaigns", href: "/campaigns" },
   { label: "Smart reply", href: "/commands" },
@@ -25,6 +26,7 @@ const navItems = [
   { label: "Contacts", href: "/contacts" },
   { label: "AI assistant", href: "/ai" },
   { label: "SMS", href: "/sms" },
+  { label: "Templates", href: "/templates" },
   { label: "DM Logs", href: "/logs" },
   { label: "Test lab", href: "/simulator" },
   { label: "Settings", href: "/settings" },

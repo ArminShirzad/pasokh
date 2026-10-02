@@ -31,6 +31,8 @@ const pageTitles: Record<string, StaticMessageKey> = {
   "/contacts": "Contacts",
   "/ai": "AI assistant",
   "/sms": "SMS",
+  "/reports": "Reports",
+  "/templates": "Templates",
   "/simulator": "Test lab",
 };
 

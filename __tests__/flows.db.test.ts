@@ -65,6 +65,8 @@ import { ensureLab, labState, runLabAction } from "../lib/simulator/lab";
 import { saveIceBreakers } from "../lib/ice-breakers/service";
 import { encryptToken } from "../lib/meta/oauth";
 import { createSmsCampaign, processSmsBatch } from "../lib/sms/campaigns";
+import { TEMPLATE_KEYS, applyTemplate } from "../lib/templates/catalog";
+import { commandProblems, commandInputSchema, referencedCommandIds } from "../lib/commands/schema";
 import { createDMWorker } from "../lib/queue/dm-worker";
 
 const schema = `flows_${randomBytes(4).toString("hex")}`;
@@ -600,5 +602,40 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: { tag: "مشتری" } });
     await drain();
     expect((await state.db.smsMessage.findMany({ where: { campaignId: campaign.id } })).map((m) => [m.phone, m.status])).toEqual([["09120000002", "SENT"]]);
+  });
+  it("creates every template paused, so none answers real followers before the owner switches it on", async () => {
+    for (const key of TEMPLATE_KEYS) await applyTemplate(key, { workspaceId: "ws", instagramAccountId: accountId, locale: "fa" });
+    const active = await Promise.all([
+      state.db.command.count({ where: { isActive: true } }),
+      state.db.form.count({ where: { isActive: true } }),
+      state.db.sequence.count({ where: { isActive: true } }),
+      state.db.automation.count({ where: { isActive: true } }),
+    ]);
+    expect(active).toEqual([0, 0, 0, 0]);
+    await act({ action: "dm", text: "قیمت" });
+    expect(await sent()).toEqual([]);
+  });
+
+  it("creates smart replies that pass the same checks as ones built by hand, with menus pointing at their own commands", async () => {
+    for (const key of TEMPLATE_KEYS) await applyTemplate(key, { workspaceId: "ws", instagramAccountId: accountId, locale: "en" });
+    const commands = await state.db.command.findMany();
+    const ids = new Set(commands.map((c) => c.id));
+    for (const c of commands) {
+      const input = commandInputSchema.parse({ ...c, responses: c.responses, sequenceId: c.sequenceId, formId: c.formId });
+      expect(commandProblems(input), c.name).toEqual([]);
+      for (const target of referencedCommandIds(input.responses as never)) expect(ids.has(target), c.name).toBe(true);
+    }
+    const campaign = await state.db.automation.findFirstOrThrow();
+    expect(campaign.publicReplyMessages).toHaveLength(3);
+  });
+
+  it("runs the branches menu end to end once switched on", async () => {
+    await applyTemplate("city-menu", { workspaceId: "ws", instagramAccountId: accountId, locale: "fa" });
+    await state.db.command.updateMany({ data: { isActive: true } });
+    await act({ action: "dm", text: "شعبه" });
+    const menu = (await sent()).at(-1)!.body as { quickReplies: { title: string; payload: string }[] };
+    expect(menu.quickReplies.map((q) => q.title)).toEqual(["تهران", "کرج"]);
+    await act({ action: "tap", payload: menu.quickReplies[1].payload, title: "کرج", quickReply: true });
+    expect((await texts()).at(-1)).toMatch(/گوهردشت/);
   });
 });
