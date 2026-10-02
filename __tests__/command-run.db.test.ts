@@ -29,6 +29,7 @@ vi.mock("@/lib/queue/client", () => ({
   POSTBACK_JOB_NAME: "process-postback",
   MESSAGE_JOB_NAME: "process-message",
   SEQUENCE_JOB_NAME: "process-sequence-step",
+  SMS_JOB_NAME: "process-sms-batch",
 }));
 
 import { ensureLab, runLabAction } from "../lib/simulator/lab";

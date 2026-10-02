@@ -91,6 +91,8 @@ model Workspace {
   mediaAssets       MediaAsset[]
   commands          Command[]
   showcases         Showcase[]
+  smsSettings       SmsSettings?
+  smsCampaigns      SmsCampaign[]
   sequences         Sequence[]
   forms             Form[]
 
@@ -787,4 +789,60 @@ model AiReply {
 
   @@unique([assistantId, triggerId])
   @@index([assistantId, igsid, createdAt])
+}
+
+/// The workspace's SMS provider (Iranian panels). TEST records without sending.
+model SmsSettings {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  /// KAVENEGAR | SMSIR | MELIPAYAMAK | TEST
+  provider    String
+  /// Encrypted; empty for TEST.
+  apiKey      String   @default("")
+  /// The sender line number (e.g. 3000…, 2000…, 1000…).
+  sender      String   @default("")
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+/// One bulk send to the contacts a filter selected when it was created.
+model SmsCampaign {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  message     String
+  provider    String
+  /// { accountId?, tag? } as chosen; the recipients are fixed at creation.
+  filter      Json
+  /// QUEUED | SENDING | DONE | STOPPED
+  status      String   @default("QUEUED")
+  stopReason  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages  SmsMessage[]
+
+  @@index([workspaceId, createdAt])
+}
+
+/// One recipient of a bulk send. Unique per phone, so a number on two
+/// contacts gets one SMS. A batch is claimed (SENDING) before the provider is
+/// called; an unclear outcome is UNCONFIRMED and never sent again.
+model SmsMessage {
+  id         String  @id @default(cuid())
+  campaignId String
+  phone      String
+  /// PENDING | SENDING | SENT | FAILED | UNCONFIRMED
+  status     String  @default("PENDING")
+  providerId String?
+  error      String?
+  /// The run that claimed it; a run only ever updates the rows it claimed.
+  claimId    String?
+
+  campaign SmsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, phone])
+  @@index([campaignId, status])
 }

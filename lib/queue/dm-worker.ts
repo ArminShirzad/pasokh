@@ -14,8 +14,10 @@ import {
   POSTBACK_JOB_NAME,
   FOLLOWUP_JOB_NAME,
   SEQUENCE_JOB_NAME,
+  SMS_JOB_NAME,
   type DmQueueJob,
   type ProcessSequenceJob,
+  type ProcessSmsJob,
   type ProcessCommentJob,
   type ProcessMessageJob,
   type ProcessPostbackJob,
@@ -63,6 +65,7 @@ import { ZernioApiError } from "@/lib/zernio/client";
 import { runSequenceStep } from "@/lib/sequences/engine";
 import { handleFormMessage } from "@/lib/forms/engine";
 import { answerWithAi } from "@/lib/ai/assistant";
+import { processSmsBatch } from "@/lib/sms/campaigns";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -1984,6 +1987,11 @@ async function dispatchJob(job: Job<DmQueueJob>): Promise<void> {
   }
   if (job.name === MESSAGE_JOB_NAME) {
     return processMessage(job as Job<ProcessMessageJob>);
+  }
+  if (job.name === SMS_JOB_NAME) {
+    const { campaignId, round } = job.data as ProcessSmsJob;
+    await processSmsBatch(campaignId, round ?? 0);
+    return;
   }
   if (job.name === SEQUENCE_JOB_NAME) {
     const { enrollmentId, step } = job.data as ProcessSequenceJob;

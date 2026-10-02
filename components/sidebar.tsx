@@ -24,6 +24,7 @@ const navItems = [
   { label: "Forms", href: "/forms" },
   { label: "Contacts", href: "/contacts" },
   { label: "AI assistant", href: "/ai" },
+  { label: "SMS", href: "/sms" },
   { label: "DM Logs", href: "/logs" },
   { label: "Test lab", href: "/simulator" },
   { label: "Settings", href: "/settings" },

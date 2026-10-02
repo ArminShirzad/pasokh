@@ -89,7 +89,14 @@ export interface ProcessSequenceJob {
   step: number;
 }
 
+// One batch of a bulk SMS send.
+export interface ProcessSmsJob {
+  campaignId: string;
+  round?: number;
+}
+
 export type DmQueueJob =
+  | ProcessSmsJob
   | ProcessSequenceJob
   | ProcessCommentJob
   | ProcessPostbackJob
@@ -100,6 +107,7 @@ export const POSTBACK_JOB_NAME = "process-postback";
 export const FOLLOWUP_JOB_NAME = "process-followup";
 export const MESSAGE_JOB_NAME = "process-message";
 export const SEQUENCE_JOB_NAME = "process-sequence-step";
+export const SMS_JOB_NAME = "process-sms-batch";
 
 let dmQueue: Queue<DmQueueJob> | null = null;
 

@@ -46,6 +46,7 @@ vi.mock("@/lib/queue/client", () => ({
   FOLLOWUP_JOB_NAME: "process-followup",
   MESSAGE_JOB_NAME: "process-message",
   SEQUENCE_JOB_NAME: "process-sequence-step",
+  SMS_JOB_NAME: "process-sms-batch",
 }));
 vi.mock("@/lib/utils/rate-limiter", () => ({
   reserveDMSlot: async () => ({ allowed: true, reserved: false }),
@@ -63,6 +64,7 @@ vi.mock("bullmq", () => ({
 import { ensureLab, labState, runLabAction } from "../lib/simulator/lab";
 import { saveIceBreakers } from "../lib/ice-breakers/service";
 import { encryptToken } from "../lib/meta/oauth";
+import { createSmsCampaign, processSmsBatch } from "../lib/sms/campaigns";
 import { createDMWorker } from "../lib/queue/dm-worker";
 
 const schema = `flows_${randomBytes(4).toString("hex")}`;
@@ -160,6 +162,9 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     await state.db.sequence.deleteMany();
     await state.db.form.deleteMany();
     await state.db.aiAssistant.deleteMany();
+    await state.db.smsCampaign.deleteMany();
+    await state.db.smsSettings.deleteMany();
+    await state.db.contact.deleteMany();
     vi.unstubAllGlobals();
     await runLabAction("ws", { action: "reset" });
     accountId = (await ensureLab("ws")).account.id;
@@ -496,5 +501,104 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     for (const text of ["الف", "ب", "پ"]) await act({ action: "dm", text });
     expect(await texts()).toEqual(["۱", "۲"]);
     expect(model.calls).toHaveLength(2);
+  });
+  async function contactsWithPhones(phones: string[]) {
+    await state.db.contact.createMany({
+      data: phones.map((phone, i) => ({ instagramAccountId: accountId, igsid: `sms_${i}`, phone })),
+    });
+  }
+  async function smsPanel(provider = "KAVENEGAR") {
+    process.env.ENCRYPTION_KEY ??= "0".repeat(64);
+    await state.db.smsSettings.create({ data: { workspaceId: "ws", provider, apiKey: provider === "TEST" ? "" : encryptToken("k"), sender: "3000" } });
+  }
+  // The Kavenegar endpoint, stubbed: records the receptors of each call.
+  function stubKavenegar(status = 200) {
+    const sentTo: string[][] = [];
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      const receptors = (new URLSearchParams(String(init.body)).get("receptor") ?? "").split(",");
+      sentTo.push(receptors);
+      return new Response(
+        JSON.stringify(status === 200
+          ? { return: { status: 200, message: "ok" }, entries: receptors.map((r, i) => ({ receptor: r, messageid: i + 1 })) }
+          : { return: { status, message: "اعتبار کافی نیست" } }),
+        { status: status === 200 ? 200 : 400 },
+      );
+    });
+    return sentTo;
+  }
+  const smsStatuses = async (campaignId: string) =>
+    Object.fromEntries((await state.db.smsMessage.groupBy({ by: ["status"], where: { campaignId }, _count: { _all: true } })).map((r) => [r.status, r._count._all]));
+
+  it("sends each number once, in batches of 100, however the numbers were written", async () => {
+    const phones = Array.from({ length: 230 }, (_, i) => `0912${String(i).padStart(7, "0")}`);
+    await contactsWithPhones([...phones, "+98 912 000 0001", "۰۹۱۲۰۰۰۰۰۰۲"]); // two repeats in other forms
+    await smsPanel();
+    const sentTo = stubKavenegar();
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "حراج", message: "حراج پاییزه", filter: {} });
+    await drain();
+    expect(sentTo.map((b) => b.length)).toEqual([100, 100, 30]);
+    expect(new Set(sentTo.flat()).size).toBe(230);
+    expect(await smsStatuses(campaign.id)).toEqual({ SENT: 230 });
+    expect((await state.db.smsCampaign.findUnique({ where: { id: campaign.id } }))?.status).toBe("DONE");
+  });
+
+  it("stops the whole send when the panel refuses the account, instead of trying every batch", async () => {
+    await contactsWithPhones(Array.from({ length: 250 }, (_, i) => `0935${String(i).padStart(7, "0")}`));
+    await smsPanel();
+    const sentTo = stubKavenegar(418);
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: {} });
+    await drain();
+    expect(sentTo).toHaveLength(1);
+    expect(await smsStatuses(campaign.id)).toEqual({ FAILED: 250 });
+    expect(await state.db.smsCampaign.findUnique({ where: { id: campaign.id } })).toMatchObject({ status: "STOPPED", stopReason: expect.stringMatching(/418/) });
+  });
+
+  it("never resends a batch whose outcome was unclear", async () => {
+    await contactsWithPhones(["09120000001", "09120000002"]);
+    await smsPanel();
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      throw new TypeError("socket hang up");
+    });
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: {} });
+    await drain();
+    await processSmsBatch(campaign.id, 5); // a stray retry
+    expect(calls).toBe(1);
+    expect(await smsStatuses(campaign.id)).toEqual({ UNCONFIRMED: 2 });
+  });
+
+  it("sends every number once even when batch jobs run twice", async () => {
+    await contactsWithPhones(Array.from({ length: 150 }, (_, i) => `0901${String(i).padStart(7, "0")}`));
+    await smsPanel();
+    const sentTo = stubKavenegar();
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: {} });
+    state.jobs.push({ ...state.jobs[0] });
+    await drain();
+    await processSmsBatch(campaign.id, 0);
+    expect(sentTo.flat()).toHaveLength(150);
+    expect(new Set(sentTo.flat()).size).toBe(150);
+  });
+
+  it("sends every number once when two runs of the same batch overlap, which once handed the first run's numbers back mid-send", async () => {
+    await contactsWithPhones(Array.from({ length: 150 }, (_, i) => `0902${String(i).padStart(7, "0")}`));
+    await smsPanel();
+    const sentTo = stubKavenegar();
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: {} });
+    state.jobs = [];
+    await Promise.all([processSmsBatch(campaign.id, 0), processSmsBatch(campaign.id, 0), processSmsBatch(campaign.id, 0)]);
+    await drain();
+    expect(sentTo.flat()).toHaveLength(150);
+    expect(new Set(sentTo.flat()).size).toBe(150);
+    expect(await smsStatuses(campaign.id)).toEqual({ SENT: 150 });
+  });
+
+  it("sends only to the chosen tag", async () => {
+    await contactsWithPhones(["09120000001", "09120000002"]);
+    await state.db.contact.updateMany({ where: { phone: "09120000002" }, data: { tags: ["مشتری"] } });
+    await smsPanel("TEST");
+    const campaign = await createSmsCampaign({ workspaceId: "ws", name: "x", message: "x", filter: { tag: "مشتری" } });
+    await drain();
+    expect((await state.db.smsMessage.findMany({ where: { campaignId: campaign.id } })).map((m) => [m.phone, m.status])).toEqual([["09120000002", "SENT"]]);
   });
 });
