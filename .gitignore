@@ -43,3 +43,6 @@ next-env.d.ts
 
 /app/generated/prisma
 .gstack/
+
+# Uploaded media in local development (Docker keeps it in the appdata volume)
+/data

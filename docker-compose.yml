@@ -74,6 +74,9 @@ services:
     command: ["npm", "run", "start"]
     ports:
       - "${PASOKH_BIND:-127.0.0.1}:${PASOKH_PORT:-3000}:3000"
+    volumes:
+      # Uploaded DM attachments (images, video, voice, PDFs).
+      - appdata:/app/data
     depends_on:
       migrate: { condition: service_completed_successfully }
       redis: { condition: service_healthy }
@@ -122,6 +125,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  appdata:
   pgdata:
   redisdata:
   caddydata:

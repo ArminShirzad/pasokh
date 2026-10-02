@@ -88,6 +88,7 @@ model Workspace {
   linkClicks        LinkClick[]
   webhookEvents     WebhookEvent[]
   operationalEvents OperationalEvent[]
+  mediaAssets       MediaAsset[]
 
   @@index([ownerId])
 }
@@ -473,4 +474,23 @@ model Contact {
 
   @@unique([instagramAccountId, igsid])
   @@index([instagramAccountId, lastInboundAt])
+}
+
+/// A file uploaded to send in DMs (image, video, voice, PDF). Providers fetch
+/// attachments by URL, so it is served publicly at /media/<publicId>.<ext>;
+/// publicId is long and random so files cannot be enumerated.
+model MediaAsset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  publicId    String   @unique
+  kind        String
+  mimeType    String
+  extension   String
+  fileName    String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }

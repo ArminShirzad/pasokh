@@ -31,7 +31,8 @@ RUN npm run build
 FROM node:24-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    PASOKH_DATA_DIR=/app/data
 
 # wget: cron.sh and the quick-tunnel lookup in the entrypoint. tzdata: dates in
 # the owner's timezone (TZ, e.g. Asia/Tehran) instead of UTC. openssl: the
@@ -53,7 +54,7 @@ COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 
-RUN chmod +x scripts/docker-entrypoint.sh scripts/cron.sh
+RUN chmod +x scripts/docker-entrypoint.sh scripts/cron.sh && mkdir -p /app/data/media
 
 EXPOSE 3000
 # Resolves the public URL (quick tunnel) before starting the role's command.
