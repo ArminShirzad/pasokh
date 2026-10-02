@@ -147,6 +147,15 @@ Each phase lists what "done" means.
   flows can be tested without Instagram (also used by e2e tests).
 - Done when: every block type delivers through both providers in the simulator,
   and through Zernio on a real account.
+- Status 2026-10-02: built. OutboundMessage (text + buttons / quick replies,
+  media, cards) with Instagram's limits, Meta and Zernio request bodies,
+  reactions; inbound quick replies, story replies, story mentions,
+  attachments; Contact with the 24-hour window; MediaAsset uploads served
+  publicly; the test lab (SIMULATOR provider) with Instagram's refusal rules.
+  The follow-gate campaign runs end to end in the lab. Not yet verified: any
+  of it through Zernio or Meta on a real account. The upload UI arrives with
+  the P2 builder. ResponseBlock became OutboundMessage lists, stored by the
+  features that use them (P2 onwards).
 
 ### P2 Smart reply (commands)
 - Command + triggers, exact / contains, story picker, quick-reply chaining,
