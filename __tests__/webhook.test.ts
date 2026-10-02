@@ -60,6 +60,23 @@ describe("verifyWebhookSignature", () => {
 });
 
 describe("parseCommentEvents", () => {
+  it("reads live-video comments (their own webhook field) and marks them live, so only live campaigns answer them", () => {
+    const payload = {
+      object: "instagram",
+      entry: [{
+        id: "ig_1",
+        time: 1,
+        changes: [{
+          field: "live_comments",
+          value: { id: "c_live", text: "سلام", from: { id: "fan_1", username: "fan" }, media: { id: "live_1", media_product_type: "LIVE" } },
+        }],
+      }],
+    };
+    expect(parseCommentEvents(payload)).toEqual([
+      expect.objectContaining({ commentId: "c_live", mediaId: "live_1", commenterId: "fan_1", isLive: true }),
+    ]);
+  });
+
   it("should parse a valid comment event", () => {
     const payload = {
       object: "instagram",

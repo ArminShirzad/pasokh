@@ -21,6 +21,8 @@ interface Campaign {
   postUrl: string | null;
   pendingNextReel: boolean;
   matchAnyPost: boolean;
+  matchLive?: boolean;
+  commandId?: string | null;
   keywords: string[];
   matchAnyWord: boolean;
   dmMessage: string;
@@ -435,6 +437,16 @@ export default function CampaignsPage() {
                   {auto.pendingNextReel && (
                     <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-warning">
                       {t("Waiting for next reel")}
+                    </span>
+                  )}
+                  {auto.matchLive && (
+                    <span className="shrink-0 rounded-full bg-error/10 px-2 py-0.5 text-xs font-medium text-error">
+                      {t("Live video")}
+                    </span>
+                  )}
+                  {auto.commandId && (
+                    <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
+                      {t("Smart reply")}
                     </span>
                   )}
                   {auto.requireFollow && (

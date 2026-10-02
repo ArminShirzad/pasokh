@@ -21,6 +21,8 @@ interface Campaign {
   postUrl: string | null;
   pendingNextReel: boolean;
   matchAnyPost: boolean;
+  matchLive?: boolean;
+  commandId?: string | null;
   keywords: string[];
   matchAnyWord: boolean;
   dmTriggerEnabled: boolean;
@@ -157,7 +159,9 @@ export default function CampaignDetailPage() {
     ? t("Any post or reel")
     : campaign.pendingNextReel
       ? t("Your next reel")
-      : t("A specific post or reel");
+      : campaign.matchLive && !campaign.postId
+        ? t("my live videos")
+        : t("A specific post or reel");
   const matchText = campaign.matchAnyWord
     ? t("Any comment")
     : campaign.keywords.join(", ") || t("No keywords");
@@ -205,7 +209,7 @@ export default function CampaignDetailPage() {
               />
             ) : (
               <div className="grid h-14 w-14 place-items-center rounded bg-surface-hover text-[10px] text-muted">
-                {campaign.matchAnyPost || campaign.pendingNextReel ? "Any" : t("Post")}
+                {campaign.matchLive && !campaign.postId ? t("Live video") : campaign.matchAnyPost || campaign.pendingNextReel ? t("All") : t("Post")}
               </div>
             )}
             <span className="text-sm text-foreground">{trigger}</span>

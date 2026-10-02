@@ -92,9 +92,9 @@ Still in the Instagram product, find the Configure webhooks step.
 - Callback URL: `https://pasokh.example.com/api/webhook`
 - Verify token: the value of `WEBHOOK_VERIFY_TOKEN` from your `.env`
 - Click Verify and save. It should succeed immediately, because the app answers Meta's verification challenge. If the button is greyed out, click into the verify-token field and paste the token again; editing the callback URL often clears it.
-- Subscribe to the `comments` field, and to `messages` as well.
+- Subscribe to the `comments` field, to `messages`, and to `live_comments` if you will use live campaigns.
 
-Both fields matter. `comments` carries comment-to-DM, which is what most people come here for. `messages` carries inbound DMs and Story replies, which is what a campaign's "also reply when someone DMs these words" toggle runs on. Subscribe to `comments` alone and that toggle looks enabled but never fires, because the events it needs are never delivered.
+These fields matter. `comments` carries comment-to-DM, which is what most people come here for. `messages` carries inbound DMs and Story replies, which is what smart replies and a campaign's "also reply when someone DMs these words" toggle run on. Subscribe to `comments` alone and those look enabled but never fire, because the events they need are never delivered. `live_comments` carries comments under your live videos, and Meta sends them only while the video is on air; a campaign set to "Comments on my live videos" listens for them.
 
 To test delivery without a real comment, click Test next to `comments`, then click Send to My Server. This is a two-step control. Clicking Test only previews the sample payload; the second button is what actually POSTs it to your endpoint. After sending, a row should appear in your `WebhookEvent` table.
 

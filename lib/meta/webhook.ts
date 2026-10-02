@@ -45,6 +45,8 @@ export interface WebhookCommentEvent {
    * matching has to consider it as well as mediaId.
    */
   originalMediaId?: string;
+  /** Left under a live video while it broadcasts (`live_comments` field). */
+  isLive?: boolean;
 }
 
 interface WebhookEntry {
@@ -134,7 +136,10 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      if (change.field !== "comments") continue;
+      // Live-video comments come as their own field with the same shape, and
+      // only while the video is on air.
+      if (change.field !== "comments" && change.field !== "live_comments") continue;
+      const isLive = change.field === "live_comments";
 
       const value = change.value;
       const commentId = value?.id ?? value?.comment_id;
@@ -167,6 +172,7 @@ export function parseCommentEvents(payload: WebhookPayload): WebhookCommentEvent
         commenterName: value.from?.username,
         mediaId,
         originalMediaId,
+        ...(isLive ? { isLive } : {}),
       });
     }
   }

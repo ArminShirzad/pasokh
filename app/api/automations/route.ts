@@ -10,6 +10,8 @@ import {
   syncCampaignLinks,
 } from "@/lib/campaigns/links";
 import { buildReportUrl, generateReportShareSlug } from "@/lib/reports/share";
+import { cleanPublicReplies } from "@/lib/campaigns/public-replies";
+import { campaignProblem } from "@/lib/campaigns/validate";
 import {
   canManageWorkspace,
   getCurrentWorkspaceContext,
@@ -28,6 +30,8 @@ const createAutomationSchema = z
     postUrl: z.string().url().optional().nullable(),
     pendingNextReel: z.boolean().optional().default(false),
     matchAnyPost: z.boolean().optional().default(false),
+    matchLive: z.boolean().optional().default(false),
+    commandId: z.string().min(1).max(40).optional().nullable(),
     keywords: z.array(z.string().min(1).max(50)).max(10).optional().default([]),
     matchAnyWord: z.boolean().optional().default(false),
     dmTriggerEnabled: z.boolean().optional().default(false),
@@ -65,9 +69,9 @@ const createAutomationSchema = z
     isActive: z.boolean().optional().default(true),
     wholeWordMatch: z.boolean().optional().default(true),
   })
-  // A campaign must target a specific post, any post, or the next reel.
+  // A campaign must target a specific post, any post, the next reel, or lives.
   .refine(
-    (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId),
+    (d) => d.matchAnyPost || d.pendingNextReel || Boolean(d.postId) || d.matchLive,
     { message: "Choose which post(s) trigger the campaign", path: ["postId"] }
   )
   // And it must match either specific words or any word.
@@ -91,6 +95,8 @@ const updateAutomationSchema = z.object({
   postUrl: z.string().url().optional().nullable(),
   pendingNextReel: z.boolean().optional(),
   matchAnyPost: z.boolean().optional(),
+  matchLive: z.boolean().optional(),
+  commandId: z.string().min(1).max(40).optional().nullable(),
   keywords: z.array(z.string().min(1).max(50)).max(10).optional(),
   matchAnyWord: z.boolean().optional(),
   dmTriggerEnabled: z.boolean().optional(),
@@ -345,6 +351,24 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const problem = await campaignProblem(
+    {
+      publicReplyEnabled: parsed.data.publicReplyEnabled,
+      publicReplyMessages:
+        parsed.data.publicReplyMessages.length > 0
+          ? parsed.data.publicReplyMessages
+          : parsed.data.publicReplyMessage
+            ? [parsed.data.publicReplyMessage]
+            : [],
+      matchLive: parsed.data.matchLive,
+      commandId: parsed.data.commandId ?? null,
+    },
+    instagramAccount,
+  );
+  if (problem) {
+    return NextResponse.json({ success: false, error: problem }, { status: 400 });
+  }
+
   const linkCreates = buildInitialCampaignLinks({
     workspaceId,
     primaryUrl: parsed.data.trackedDestinationUrl,
@@ -375,6 +399,8 @@ export async function POST(request: NextRequest) {
       postUrl: isSpecificPost ? parsed.data.postUrl : null,
       pendingNextReel,
       matchAnyPost,
+      matchLive: parsed.data.matchLive,
+      commandId: parsed.data.commandId || null,
       keywords: matchAnyWord ? [] : parsed.data.keywords,
       matchAnyWord,
       dmTriggerEnabled: parsed.data.dmTriggerEnabled,
@@ -403,7 +429,7 @@ export async function POST(request: NextRequest) {
         : 0,
       publicReplyEnabled: parsed.data.publicReplyEnabled,
       publicReplyMessages: parsed.data.publicReplyEnabled
-        ? publicReplyList
+        ? cleanPublicReplies(publicReplyList)
         : [],
       publicReplyMessage: parsed.data.publicReplyEnabled
         ? publicReplyList[0] ?? parsed.data.publicReplyMessage ?? null
@@ -470,12 +496,44 @@ export async function PATCH(request: NextRequest) {
 
   const existing = await prisma.automation.findFirst({
     where: { id: automationId, workspaceId },
+    include: { instagramAccount: { select: { id: true, provider: true } } },
   });
 
   if (!existing) {
     return NextResponse.json(
       { success: false, error: "Campaign not found" },
       { status: 404 }
+    );
+  }
+
+  // Checked on the campaign as it will be after this change. Turning a
+  // campaign on or off alone does not re-check rules it was saved under
+  // (campaigns from before the three-wording rule keep working until edited).
+  const touchesRules = ["publicReplyEnabled", "publicReplyMessages", "matchLive", "commandId"].some(
+    (key) => key in parsed.data && parsed.data[key as keyof typeof parsed.data] !== undefined,
+  );
+  if (touchesRules) {
+    const problem = await campaignProblem(
+      {
+        publicReplyEnabled: parsed.data.publicReplyEnabled ?? existing.publicReplyEnabled,
+        publicReplyMessages: parsed.data.publicReplyMessages ?? existing.publicReplyMessages,
+        matchLive: parsed.data.matchLive ?? existing.matchLive,
+        commandId: parsed.data.commandId !== undefined ? parsed.data.commandId : existing.commandId,
+      },
+      existing.instagramAccount,
+    );
+    if (problem) {
+      return NextResponse.json({ success: false, error: problem }, { status: 400 });
+    }
+  }
+  const postTargeted =
+    (parsed.data.matchAnyPost ?? existing.matchAnyPost) ||
+    (parsed.data.pendingNextReel ?? existing.pendingNextReel) ||
+    Boolean(parsed.data.postId !== undefined ? parsed.data.postId : existing.postId);
+  if (!postTargeted && !(parsed.data.matchLive ?? existing.matchLive)) {
+    return NextResponse.json(
+      { success: false, error: "Choose which post(s) trigger the campaign" },
+      { status: 400 }
     );
   }
 
@@ -508,12 +566,11 @@ export async function PATCH(request: NextRequest) {
   }
   // Keep the public-reply variations list and the legacy single field in sync.
   if (automationData.publicReplyMessages !== undefined) {
-    const list = automationData.publicReplyMessages
-      .map((m) => m.trim())
-      .filter(Boolean);
+    const list = cleanPublicReplies(automationData.publicReplyMessages);
     automationData.publicReplyMessages = list;
     automationData.publicReplyMessage = list[0] ?? null;
   }
+  if (automationData.commandId === "") automationData.commandId = null;
   if (automationData.publicReplyEnabled === false) {
     automationData.publicReplyMessages = [];
     automationData.publicReplyMessage = null;

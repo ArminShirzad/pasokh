@@ -12,3 +12,7 @@ export function defaultFollowPrompt(): string {
 export function defaultFollowButtonLabel(): string {
   return defaultLocale() === "fa" ? "فالو کردم ✅" : "I'm following ✅";
 }
+
+export function defaultContinueButtonLabel(): string {
+  return defaultLocale() === "fa" ? "ادامه 👈" : "Continue 👉";
+}

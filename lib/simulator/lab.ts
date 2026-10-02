@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { processInstagramWebhook } from "@/lib/queue/process-webhook";
-import { SIM_POSTS } from "./provider";
+import { SIM_LIVE_ID, SIM_POSTS } from "./provider";
 
 /**
  * The test lab: one simulated Instagram account per workspace and one
@@ -14,6 +14,7 @@ import { SIM_POSTS } from "./provider";
 
 export type LabAction =
   | { action: "comment"; postId: string; text: string }
+  | { action: "live_comment"; text: string }
   | { action: "dm"; text: string }
   | { action: "tap"; payload: string; title: string; quickReply?: boolean }
   | { action: "story_reply"; text: string }
@@ -59,6 +60,7 @@ export async function labState(workspaceId: string) {
     account: { id: account.id, username: account.username },
     fan: { username: fan.username, follows: fan.follows },
     posts: SIM_POSTS.map((p) => ({ id: p.id, caption: p.caption ?? "", type: p.media_type })),
+    liveId: SIM_LIVE_ID,
     events: events.map((e) => ({
       id: e.id,
       direction: e.direction,
@@ -101,6 +103,14 @@ export async function runLabAction(workspaceId: string, input: LabAction): Promi
       await record("comment", { text: input.text }, { postId: input.postId, commentId });
       await deliver({
         changes: [{ field: "comments", value: { id: commentId, text: input.text, from: sender, media: { id: input.postId } } }],
+      });
+      return;
+    }
+    case "live_comment": {
+      const commentId = newId("simc");
+      await record("comment", { text: input.text }, { postId: SIM_LIVE_ID, commentId });
+      await deliver({
+        changes: [{ field: "live_comments", value: { id: commentId, text: input.text, from: sender, media: { id: SIM_LIVE_ID, media_product_type: "LIVE" } } }],
       });
       return;
     }

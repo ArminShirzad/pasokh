@@ -28,6 +28,7 @@ type LabState = {
   account: { id: string; username: string };
   fan: { username: string; follows: boolean };
   posts: { id: string; caption: string; type: string }[];
+  liveId: string;
   events: LabEvent[];
 };
 
@@ -106,11 +107,18 @@ export default function SimulatorPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-4">
           <h2 className="text-sm font-semibold text-foreground">{t("Posts")}</h2>
-          {state.posts.map((post) => {
+          {[...state.posts.map((post) => ({ ...post, live: false })), { id: state.liveId, caption: "", type: "LIVE", live: true }].map((post) => {
             const thread = state.events.filter((e) => e.postId === post.id && (e.kind === "comment" || e.kind === "comment_reply"));
             return (
               <div key={post.id} className="rounded-lg border border-border bg-surface p-4">
-                <p className="text-sm text-foreground">{post.caption}</p>
+                {post.live ? (
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <span className="rounded bg-error px-1.5 py-0.5 text-[11px] font-bold text-white">{t("Live video")}</span>
+                    {t("Live video, on air")}
+                  </p>
+                ) : (
+                  <p className="text-sm text-foreground">{post.caption}</p>
+                )}
                 <div className="mt-3 space-y-2">
                   {thread.map((e) => (
                     <p key={e.id} className={`text-sm ${e.kind === "comment_reply" ? "ms-6 text-accent" : "text-foreground"}`}>
@@ -128,7 +136,7 @@ export default function SimulatorPage() {
                     const text = comments[post.id]?.trim();
                     if (!text) return;
                     setComments({ ...comments, [post.id]: "" });
-                    void act({ action: "comment", postId: post.id, text });
+                    void act(post.live ? { action: "live_comment", text } : { action: "comment", postId: post.id, text });
                   }}
                 >
                   <input

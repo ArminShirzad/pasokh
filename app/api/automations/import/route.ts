@@ -96,7 +96,9 @@ export async function POST(request: NextRequest) {
         postUrl: campaign.postUrl ?? null,
         keywords: campaign.keywords,
         dmMessage: campaign.dmMessage.slice(0, 1000),
-        publicReplyEnabled: Boolean(publicReply),
+        // One wording is below the three that public replies need, so it is
+        // kept for the editor but left off until two more are added.
+        publicReplyEnabled: false,
         publicReplyMessage: publicReply ? publicReply.slice(0, 1000) : null,
         isActive: campaign.isActive,
         wholeWordMatch: campaign.wholeWordMatch,

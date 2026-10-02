@@ -211,6 +211,13 @@ model Automation {
   publicReplyEnabled Boolean @default(false)
   publicReplyMessage String?
   publicReplyMessages String[] @default([])
+  /// Fire on comments under the account's live videos while they broadcast
+  /// (Meta connections only: Zernio does not forward live comments).
+  matchLive      Boolean @default(false)
+  /// After the comment reply, the commenter's answer (or button tap, or a
+  /// passed follow gate) runs this smart-reply command instead of sending
+  /// dmMessage and the links: cards, media and menus need an open DM thread.
+  commandId      String?
   isActive       Boolean @default(true)
   wholeWordMatch Boolean @default(true)
   reportShareSlug    String? @unique
@@ -221,6 +228,7 @@ model Automation {
 
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  command          Command?         @relation(fields: [commandId], references: [id], onDelete: SetNull)
   dmLogs           DmLog[]
   trackedLinks     TrackedLink[]
   linkClicks       LinkClick[]
@@ -563,6 +571,7 @@ model Command {
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
   runs             CommandRun[]
+  automations      Automation[]
 
   @@index([instagramAccountId, isActive])
 }

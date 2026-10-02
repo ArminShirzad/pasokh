@@ -13,19 +13,25 @@
  */
 
 import { useI18n } from "@/lib/i18n/provider";
+import Link from "next/link";
+import { handle } from "@/lib/text/handle";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
 import PostPicker from "@/components/post-picker";
 import CampaignPreview, { type PreviewTab } from "@/components/campaign-preview";
 import { readCache, writeCache } from "@/lib/client-cache";
+import { MIN_PUBLIC_REPLY_VARIANTS, cleanPublicReplies } from "@/lib/campaigns/public-replies";
+import type { StaticMessageKey } from "@/lib/i18n";
 import {
   IMPORT_QUEUE_KEY,
   IMPORT_ACCOUNT_KEY,
   type ImportRow,
 } from "@/lib/import-queue";
 
-type TriggerScope = "specific" | "any" | "next";
+type TriggerScope = "specific" | "any" | "next" | "live";
+type ReplyKind = "message" | "command";
+type CommandOption = { id: string; name: string; isActive: boolean };
 type MatchMode = "specific" | "any";
 
 interface LoadedCampaign {
@@ -52,6 +58,8 @@ interface LoadedCampaign {
   publicReplyEnabled: boolean;
   publicReplyMessage: string | null;
   publicReplyMessages: string[];
+  matchLive: boolean;
+  commandId: string | null;
   isActive: boolean;
   instagramAccountId: string;
   trackedLinks?: { destinationUrl: string; label?: string | null }[];
@@ -169,6 +177,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   const [openingDmButtonLabel, setOpeningDmButtonLabel] = useState("");
 
   const [dmMessage, setDmMessage] = useState("");
+  const [replyKind, setReplyKind] = useState<ReplyKind>("message");
+  const [commandId, setCommandId] = useState("");
+  const [commands, setCommands] = useState<CommandOption[] | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [trackedDestinationUrl, setTrackedDestinationUrl] = useState("");
   const [linkButtonLabel, setLinkButtonLabel] = useState("Open link");
@@ -254,8 +265,10 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setName(c.name);
         setSelectedAccountId(c.instagramAccountId);
         setTriggerScope(
-          c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : "specific"
+          c.matchAnyPost ? "any" : c.pendingNextReel ? "next" : c.matchLive && !c.postId ? "live" : "specific"
         );
+        setReplyKind(c.commandId ? "command" : "message");
+        setCommandId(c.commandId ?? "");
         setPostId(c.postId);
         setPostUrl(c.postUrl);
         setMatchMode(c.matchAnyWord ? "any" : "specific");
@@ -294,6 +307,23 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [mode, campaignId]);
+
+  // Smart replies the campaign can hand off to: the selected account's only.
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    let cancelled = false;
+    fetch(`/api/commands?accountId=${encodeURIComponent(selectedAccountId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((payload) => {
+        if (!cancelled) setCommands((payload.commands ?? []) as CommandOption[]);
+      })
+      .catch(() => {
+        if (!cancelled) setCommands([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAccountId]);
 
   // Track which posts on the selected account are already assigned to an
   // automation, so the picker can highlight them. The campaign being edited is
@@ -366,8 +396,12 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
   }, [mode]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const username =
-    accounts.find((a) => a.id === selectedAccountId)?.username ?? "yourbrand";
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const username = selectedAccount?.username ?? "yourbrand";
+  // Zernio does not forward live-video comments; Meta (and the test lab) do.
+  const liveSupported = selectedAccount?.provider !== "ZERNIO";
+  const isLive = triggerScope === "live";
+  const usesCommand = replyKind === "command";
 
   function handlePostSelect(
     id: string,
@@ -393,15 +427,23 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       return setError(t("Pick a post or reel to trigger the campaign."));
     if (matchMode === "specific" && keywords.length === 0)
       return setError(t("Add at least one keyword, or switch to any word."));
-    if (!dmMessage.trim()) return setError(t("Add the DM with the link."));
+    if (isLive && !liveSupported)
+      return setError(t("Live comments need a Meta connection: Zernio does not forward them."));
+    if (usesCommand && !commandId) return setError(t("Choose the smart reply to send."));
+    if (!dmMessage.trim())
+      return setError(usesCommand ? t("Write the reply to their comment.") : t("Add the DM with the link."));
+    if (publicReplyEnabled && !isLive && cleanPublicReplies(publicReplyMessages).length < MIN_PUBLIC_REPLY_VARIANTS)
+      return setError(t("Public replies need at least 3 different wordings, or Instagram may hide them as spam."));
     if (openingDmEnabled && (!openingDmMessage.trim() || !openingDmButtonLabel.trim()))
       return setError(t("Your opening DM needs a message and a button label."));
 
     setSaving(true);
 
     const payload = {
-      name: name.trim() || `Campaign for @${username}`,
+      name: name.trim() || t("Campaign for {username}", { username: handle(username) }),
       instagramAccountId: selectedAccountId,
+      matchLive: isLive,
+      commandId: usesCommand ? commandId : null,
       postId: triggerScope === "specific" ? postId : null,
       postUrl: triggerScope === "specific" ? postUrl : null,
       matchAnyPost: triggerScope === "any",
@@ -413,13 +455,14 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
       openingDmEnabled,
       openingDmMessage: openingDmEnabled ? openingDmMessage : null,
       openingDmButtonLabel: openingDmEnabled ? openingDmButtonLabel : null,
-      publicReplyEnabled,
-      publicReplyMessages: publicReplyEnabled
-        ? publicReplyMessages.map((m) => m.trim()).filter(Boolean)
+      publicReplyEnabled: publicReplyEnabled && !isLive,
+      publicReplyMessages: publicReplyEnabled && !isLive
+        ? cleanPublicReplies(publicReplyMessages)
         : [],
-      trackedDestinationUrl: trackedDestinationUrl.trim() || "",
+      // A smart reply carries its own buttons; the campaign's links go.
+      trackedDestinationUrl: usesCommand ? "" : trackedDestinationUrl.trim() || "",
       linkButtonLabel: linkButtonLabel.trim() || "Open link",
-      secondaryDestinationUrl: secondaryDestinationUrl.trim() || "",
+      secondaryDestinationUrl: usesCommand ? "" : secondaryDestinationUrl.trim() || "",
       secondaryButtonLabel: secondaryButtonLabel.trim() || "Open link",
       requireFollow,
       followPromptMessage: requireFollow ? followPromptMessage.trim() : "",
@@ -494,7 +537,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         setError(
           firstField
             ? `${firstField}: ${fieldErrors[firstField][0]}`
-            : data.error ?? t("Failed to save campaign")
+            : data.error
+              ? t(data.error as StaticMessageKey)
+              : t("Failed to save campaign")
         );
         if (typeof window !== "undefined")
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -697,6 +742,19 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
           >
             {t("next post or reel")}
           </Radio>
+          <Radio
+            checked={isLive}
+            onSelect={() => setTriggerScope("live")}
+          >
+            {t("my live videos")}
+          </Radio>
+          {isLive && (
+            <p className={`text-xs ${liveSupported ? "text-muted" : "text-error"}`}>
+              {liveSupported
+                ? t("Comments under your live videos, while they are on air. Instagram has no public replies there, only the DM.")
+                : t("Live comments need a Meta connection: Zernio does not forward them.")}
+            </p>
+          )}
         </Section>
 
         <Section title={t("And this comment has")}>
@@ -740,16 +798,27 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 : t("A DM containing any of these words gets the same reply, no comment needed.")}
             </p>
           )}
+          {!isLive && (
           <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
             <span className="text-sm text-foreground">
               {t("reply to their comments under the post")}
             </span>
             <Toggle
               on={publicReplyEnabled}
-              onToggle={() => setPublicReplyEnabled(!publicReplyEnabled)}
+              onToggle={() => {
+                if (!publicReplyEnabled) {
+                  setPublicReplyMessages((prev) =>
+                    prev.length >= MIN_PUBLIC_REPLY_VARIANTS
+                      ? prev
+                      : [...prev, ...Array<string>(MIN_PUBLIC_REPLY_VARIANTS - prev.length).fill("")]
+                  );
+                }
+                setPublicReplyEnabled(!publicReplyEnabled);
+              }}
             />
           </div>
-          {publicReplyEnabled && (
+          )}
+          {publicReplyEnabled && !isLive && (
             <div className="space-y-2">
               {publicReplyMessages.map((msg, i) => (
                 <div key={i} className="flex items-center gap-2">
@@ -764,7 +833,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                     maxLength={1000}
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   />
-                  {publicReplyMessages.length > 1 && (
+                  {publicReplyMessages.length > MIN_PUBLIC_REPLY_VARIANTS && (
                     <button
                       type="button"
                       onClick={() =>
@@ -792,7 +861,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                 </button>
               )}
               <p className="text-xs text-muted">
-                {t("One is picked at random each time, so replies don't look identical.")}
+                {t("Write at least 3 different replies. One is picked at random each time, never the same one twice in a row, so Instagram does not treat them as spam.")}
               </p>
             </div>
           )}
@@ -866,8 +935,42 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
         </Section>
 
         <Section title={t("And then, they will get")}>
+          <Radio checked={!usesCommand} onSelect={() => setReplyKind("message")}>
+            {t("a DM with a link")}
+          </Radio>
+          <Radio checked={usesCommand} onSelect={() => setReplyKind("command")}>
+            {t("a smart reply (cards, media, menus)")}
+          </Radio>
+          {usesCommand && (
+            <div className="space-y-2 rounded-lg border border-border p-3">
+              {commands && commands.length === 0 ? (
+                <p className="text-xs text-muted">
+                  {t("This account has no smart replies yet.")}{" "}
+                  <Link href="/commands/new" className="text-accent underline">{t("New command")}</Link>
+                </p>
+              ) : (
+                <select
+                  value={commandId}
+                  onChange={(e) => setCommandId(e.target.value)}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="">{t("Choose a smart reply…")}</option>
+                  {(commands ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.isActive ? c.name : `${c.name} (${t("Paused")})`}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-muted">
+                {t("Their comment gets the text below. When they answer it (or tap its button, if they already follow you), the smart reply is sent in the DM, where cards, media and menus work.")}
+              </p>
+            </div>
+          )}
           <div className="rounded-lg border border-border p-3 space-y-2">
-            <span className="text-sm text-foreground">{t("a DM with a link")}</span>
+            <span className="text-sm text-foreground">
+              {usesCommand ? t("the reply to their comment") : t("the message")}
+            </span>
             <textarea
               value={dmMessage}
               onChange={(e) => setDmMessage(e.target.value)}
@@ -876,7 +979,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
               maxLength={1000}
             />
-            {linkOpen ? (
+            {usesCommand ? null : linkOpen ? (
               <div className="space-y-2">
                 <input
                   value={trackedDestinationUrl}
@@ -928,7 +1031,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               </button>
             )}
             <p className="text-xs text-muted">
-              {"{link}"} {t("inserts the tracked link;")} {"{username}"} {t("personalizes.")}
+              {usesCommand
+                ? <>{"{username}"} {t("personalizes.")}</>
+                : <>{"{link}"} {t("inserts the tracked link;")} {"{username}"} {t("personalizes.")}</>}
             </p>
           </div>
           <div className="mt-3 rounded-lg border border-border p-3">

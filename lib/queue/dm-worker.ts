@@ -51,10 +51,11 @@ import {
   renderMessageWithoutLink,
 } from "@/lib/tracking/message";
 import { TRACKED_LINK_ORDER } from "@/lib/tracking/link-order";
-import { defaultFollowButtonLabel, defaultFollowPrompt } from "@/lib/automation/default-copy";
+import { defaultContinueButtonLabel, defaultFollowButtonLabel, defaultFollowPrompt } from "@/lib/automation/default-copy";
+import { pickPublicReply } from "@/lib/campaigns/public-replies";
 import { claimCommentAnswer, expectCommentAnswer, releaseCommentAnswer, withContinuePrompt } from "@/lib/conversations/sessions";
 import { touchContact } from "@/lib/contacts/touch";
-import { COMMAND_PAYLOAD, activeCommandsFor, commandFromPayload, pickCommand, runCommand } from "@/lib/commands/engine";
+import { COMMAND_PAYLOAD, activeCommandsFor, commandForCampaign, commandFromPayload, pickCommand, runCommand } from "@/lib/commands/engine";
 
 import { ZernioApiError } from "@/lib/zernio/client";
 
@@ -102,6 +103,24 @@ const FOLLOW_RECHECK_TOTAL_MS = FOLLOW_RECHECK_DELAYS_MS.reduce(
  * code 1 that really did fail means that person gets no DM and can comment
  * again, which is far better than spamming someone who already received it.
  */
+
+// The wording posted last, so the next reply under the post differs from it.
+// Only a nicety: without Redis the reply still goes out, picked at random.
+async function lastPublicReply(automationId: string): Promise<string | null> {
+  try {
+    return (await getRedisConnection().get(`public_reply_last:${automationId}`)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function rememberPublicReply(automationId: string, text: string): Promise<void> {
+  try {
+    await getRedisConnection().set(`public_reply_last:${automationId}`, text, "EX", 7 * 24 * 3600);
+  } catch {
+    // see lastPublicReply
+  }
+}
 
 function formatError(error: unknown): string {
   if (error instanceof MetaApiError) {
@@ -323,11 +342,16 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       // A comment left on an ad carries the ad's own media id, while the
       // campaign is bound to the post the ad was created from, so both ids
       // have to be considered or the comment is dropped without a trace.
-      OR: [
-        { postId: mediaId },
-        ...(originalMediaId ? [{ postId: originalMediaId }] : []),
-        { matchAnyPost: true },
-      ],
+      //
+      // A live video is not a post anyone could pick in advance (it exists only
+      // while it broadcasts), so its comments go to live campaigns alone.
+      OR: job.data.isLive
+        ? [{ matchLive: true }]
+        : [
+            { postId: mediaId },
+            ...(originalMediaId ? [{ postId: originalMediaId }] : []),
+            { matchAnyPost: true },
+          ],
       isActive: true,
       instagramAccount: {
         instagramId: instagramAccountId,
@@ -388,9 +412,11 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // already sent but whose public reply never posted (e.g. it hit a rate
     // limit) must still come back so the public reply can be retried.
     if (existingLog?.status === "SKIPPED_PLAN_LIMIT") continue;
+    // Instagram has no public replies under a live video's comments.
+    const publicReplyApplies = automation.publicReplyEnabled && !job.data.isLive;
     if (
       !needsDm &&
-      (alreadyPublicReplied || existingLog?.publicReplyDeliveryUnconfirmed || !automation.publicReplyEnabled)
+      (alreadyPublicReplied || existingLog?.publicReplyDeliveryUnconfirmed || !publicReplyApplies)
     ) {
       continue;
     }
@@ -480,14 +506,14 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           ? [automation.publicReplyMessage]
           : [];
     if (
-      automation.publicReplyEnabled &&
+      publicReplyApplies &&
       replyPool.length > 0 &&
       !existingLog?.publicReplySentAt &&
       !existingLog?.publicReplyDeliveryUnconfirmed &&
       await claimCommentDelivery(automation.id, commentId, "public")
     ) {
       try {
-        const chosen = replyPool[Math.floor(Math.random() * replyPool.length)];
+        const chosen = pickPublicReply(replyPool, await lastPublicReply(automation.id));
         const publicReply = renderMessageWithTracking({
           message: chosen,
           commenterName,
@@ -505,6 +531,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           },
           data: { publicReplySentAt: new Date(), publicReplyError: null, publicReplyDeliveryUnconfirmed: false },
         });
+        await rememberPublicReply(automation.id, chosen);
       } catch (error) {
         console.error(
           "[DM Worker] Public comment reply failed:",
@@ -672,7 +699,8 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     // only once the person has messaged the account), and unknown is treated
     // as not following here: guessing wrong burns the only reply.
     const wantsRichReply =
-      useOpeningDm || automation.requireFollow || automation.trackedLinks.length > 0;
+      useOpeningDm || automation.requireFollow || automation.trackedLinks.length > 0 ||
+      Boolean(automation.commandId);
     const confirmedFollower = wantsRichReply
       ? (await getUserFollowStatus({ context: accessToken, recipientId: commenterId })) === true
       : false;
@@ -742,6 +770,32 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           postId: mediaId,
         });
         continuePayload = `followcheck:${automation.id}`;
+      } else if (automation.commandId) {
+        // The command's messages (cards, media, menus, several in a row) need
+        // the DM thread, and a private reply is a single message, so the reply
+        // asks for an answer (or, for a follower, a tap) that runs it.
+        const replyText = renderMessageWithoutLink({ message: automation.dmMessage, commenterName });
+        const revealPayload = `reveal:${automation.id}`;
+        if (confirmedFollower) {
+          await sendPrivateReplyWithButton({
+            context: accessToken,
+            instagramAccountId: automation.instagramAccount.instagramId,
+            commentId: commentId,
+            text: replyText,
+            buttonTitle: automation.linkButtonLabel || defaultContinueButtonLabel(),
+            payload: revealPayload,
+            postId: mediaId,
+          });
+        } else {
+          await sendPrivateReply({
+            context: accessToken,
+            instagramAccountId: automation.instagramAccount.instagramId,
+            commentId: commentId,
+            message: withContinuePrompt(replyText),
+            postId: mediaId,
+          });
+          continuePayload = revealPayload;
+        }
       } else if (automation.trackedLinks.length > 0 && !confirmedFollower) {
         // Not a confirmed follower: link buttons would be refused, so the
         // tracked links go inline as text and arrive without waiting.
@@ -958,6 +1012,127 @@ async function sendFollowRecheckAck({
       formatError(error),
     );
   }
+}
+
+type CampaignWithCommand = {
+  id: string;
+  workspaceId: string;
+  instagramAccountId: string;
+  commandId: string | null;
+  followUpEnabled: boolean;
+  followUpMessage: string | null;
+  followUpDelayMinutes: number | null;
+  instagramAccount: { instagramId: string };
+};
+
+/**
+ * The campaign's "reveal" when it hands off to a smart-reply command. The
+ * command run is claimed per trigger (CommandRun), so a redelivered tap or a
+ * retried job does not send it twice, and a transient failure resumes from
+ * the first unsent message. The outcome is logged on the campaign like its
+ * own reveal, and the follow-up is scheduled the same way.
+ */
+async function runCampaignCommand({
+  automation,
+  userId,
+  commenterName,
+  logCommentId,
+  logText,
+  matchedKeyword = null,
+  triggerMessageId,
+  triggerText,
+}: {
+  automation: CampaignWithCommand;
+  userId: string;
+  commenterName: string | null;
+  logCommentId: string;
+  logText: string;
+  matchedKeyword?: string | null;
+  triggerMessageId: string;
+  triggerText: string;
+}): Promise<void> {
+  const log = (data: { status: "SENT" | "FAILED" | "SKIPPED_PLAN_LIMIT"; errorMessage?: string | null; dmDeliveryUnconfirmed?: boolean }) => {
+    const fields = {
+      ...data,
+      ...(data.status === "SENT" ? { dmSentAt: new Date(), errorMessage: null } : {}),
+    };
+    return prisma.dmLog.upsert({
+      where: { automationId_commentId: { automationId: automation.id, commentId: logCommentId } },
+      create: {
+        workspaceId: automation.workspaceId,
+        automationId: automation.id,
+        instagramAccountId: automation.instagramAccountId,
+        commenterId: userId,
+        commenterName,
+        commentText: logText,
+        commentId: logCommentId,
+        matchedKeyword,
+        ...fields,
+      },
+      update: fields,
+    });
+  };
+
+  const command = automation.commandId
+    ? await commandForCampaign(automation.commandId, automation.instagramAccountId)
+    : null;
+  if (!command) {
+    await log({ status: "FAILED", errorMessage: "The campaign's smart reply was deleted or turned off" });
+    return;
+  }
+
+  const usage = await reserveWorkspaceDMSend(automation.workspaceId);
+  if (!usage.allowed) {
+    await log({ status: "SKIPPED_PLAN_LIMIT", errorMessage: `Monthly DM limit reached (${usage.limit})` });
+    return;
+  }
+
+  let outcome;
+  try {
+    outcome = await runCommand({ command, igsid: userId, triggerMessageId, triggerText, username: commenterName });
+  } catch (error) {
+    // Nothing more was sent; the retry reserves again and resumes the run.
+    await releaseWorkspaceDMReservation(automation.workspaceId, usage.periodStart);
+    throw error;
+  }
+
+  if (outcome === "DONE") {
+    await log({ status: "SENT" });
+    if (automation.followUpEnabled && automation.followUpMessage?.trim()) {
+      await getDMQueue().add(
+        FOLLOWUP_JOB_NAME,
+        {
+          instagramAccountId: automation.instagramAccount.instagramId,
+          accountConnectionId: automation.instagramAccountId,
+          userId,
+          automationId: automation.id,
+          commenterName,
+        },
+        {
+          delay: Math.max(0, automation.followUpDelayMinutes ?? 0) * 60_000,
+          jobId: `followup_${automation.id}_${userId}`,
+        },
+      );
+    }
+    return;
+  }
+  if (outcome === "SKIPPED") {
+    // This trigger already ran it.
+    await releaseWorkspaceDMReservation(automation.workspaceId, usage.periodStart);
+    return;
+  }
+  const run = await prisma.commandRun.findUnique({
+    where: { commandId_triggerMessageId: { commandId: command.id, triggerMessageId } },
+    select: { error: true, sent: true },
+  });
+  if (outcome === "FAILED" && !run?.sent) {
+    await releaseWorkspaceDMReservation(automation.workspaceId, usage.periodStart);
+  }
+  await log({
+    status: "FAILED",
+    errorMessage: `Smart reply "${command.name}": ${run?.error ?? outcome}`,
+    dmDeliveryUnconfirmed: outcome === "UNCONFIRMED",
+  });
 }
 
 /**
@@ -1182,6 +1357,22 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       }
       return;
     }
+  }
+
+  if (automation.commandId) {
+    // A read fallback only guesses that they saw the reply, and by then the
+    // messaging window is closed; a command is several messages, not one.
+    if (fallback) return;
+    await runCampaignCommand({
+      automation,
+      userId,
+      commenterName,
+      logCommentId: dedupeId,
+      logText: "(button tap)",
+      triggerMessageId: `campaign:${operationId}`,
+      triggerText: payload,
+    });
+    return;
   }
 
   const usage = await reserveWorkspaceDMSend(automation.workspaceId);
@@ -1615,6 +1806,23 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         accessToken.provider === "ZERNIO"
           ? follows === false
           : follows !== true;
+    }
+
+    // A campaign that hands off to a command runs it in place of the reveal;
+    // behind the follow gate, the prompt's tap leads to it (processPostback).
+    if (automation.commandId && !sendFollowPrompt) {
+      await runCampaignCommand({
+        automation,
+        userId: senderId,
+        commenterName,
+        logCommentId: dedupeId,
+        logText: messageText,
+        matchedKeyword: matchResult.matchedKeyword,
+        // Their own message: the command's heart (if on) lands on it.
+        triggerMessageId: messageId,
+        triggerText: messageText,
+      });
+      continue;
     }
 
     const usage = await reserveWorkspaceDMSend(automation.workspaceId);

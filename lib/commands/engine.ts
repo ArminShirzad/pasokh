@@ -141,7 +141,8 @@ export async function runCommand({
   const context = await createInstagramContext(command.instagramAccount, `cmd:${run.id}`);
   const instagramAccountId = command.instagramAccount.instagramId;
 
-  if (command.likeTrigger && run.sent === 0 && !triggerMessageId.startsWith("tap:")) {
+  // Taps and campaign hand-offs are not a message of theirs to react to.
+  if (command.likeTrigger && run.sent === 0 && !/^(tap|campaign):/.test(triggerMessageId)) {
     // Best effort: a failed heart must not stop the answer.
     await reactToMessage({ context, instagramAccountId, userId: igsid, messageId: triggerMessageId }).catch(() => {});
   }
@@ -205,6 +206,14 @@ export async function commandFromPayload(payload: string, instagramId: string) {
   if (!id) return null;
   return prisma.command.findFirst({
     where: { id, isActive: true, instagramAccount: { instagramId } },
+    include: COMMAND_INCLUDE,
+  });
+}
+
+/** The command a campaign hands off to, only if it is on and on the campaign's account. */
+export async function commandForCampaign(commandId: string, accountConnectionId: string) {
+  return prisma.command.findFirst({
+    where: { id: commandId, isActive: true, instagramAccountId: accountConnectionId },
     include: COMMAND_INCLUDE,
   });
 }

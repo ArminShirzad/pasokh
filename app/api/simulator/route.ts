@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("comment"), postId: z.string().min(1), text: z.string().trim().min(1).max(2200) }),
+  z.object({ action: z.literal("live_comment"), text: z.string().trim().min(1).max(2200) }),
   z.object({ action: z.literal("dm"), text: z.string().trim().min(1).max(1000) }),
   z.object({ action: z.literal("tap"), payload: z.string().min(1).max(1000), title: z.string().max(80), quickReply: z.boolean().optional() }),
   z.object({ action: z.literal("story_reply"), text: z.string().trim().min(1).max(1000) }),

@@ -28,6 +28,9 @@ export const SIM_POSTS: InstagramMedia[] = [
   { id: "sim_post_3", caption: "پست تست ۳", media_type: "IMAGE", timestamp: "2026-10-02T08:00:00Z" },
 ];
 
+/** The test account's live video, always on air in the lab. */
+export const SIM_LIVE_ID = "sim_live_1";
+
 export const SIM_STORIES: InstagramMedia[] = [
   { id: "sim_story_1", caption: "استوری تست", media_type: "IMAGE", media_product_type: "STORY", timestamp: "2026-10-02T10:00:00Z" },
 ];
@@ -104,6 +107,7 @@ export async function simulatorCommentReply(context: SimulatorContext, commentId
     where: { instagramAccountId: context.connectionId, kind: "comment", commentId },
   });
   if (!comment) throw new MetaApiError(100, 33, undefined, "Comment not found [simulator]");
+  if (comment.postId === SIM_LIVE_ID) throw new MetaApiError(100, undefined, undefined, "Live video comments cannot be replied to [simulator]");
   const event = await record(context, { fanId: comment.fanId, kind: "comment_reply", commentId, postId: comment.postId, body: { text } });
   return { id: event.id };
 }
