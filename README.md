@@ -47,6 +47,10 @@ password.
   Excel opens with Persian intact.
 - **Contacts**: everyone who messaged or commented, with phone, email and
   tags; search, filter and CSV export.
+- **AI assistant**: answers the DMs nothing else answered, from your persona,
+  tone and knowledge base, with Claude or any OpenAI-compatible API
+  (including Iranian gateways); told not to invent prices or facts, with a
+  daily cap per person. You bring the API key; it is stored encrypted.
 - **Test lab**: try every flow with a pretend follower, no Instagram needed;
   it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
@@ -55,7 +59,7 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): AI replies; SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): SMS.
 
 ## Install
 

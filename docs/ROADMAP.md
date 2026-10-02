@@ -233,6 +233,19 @@ Each phase lists what "done" means.
 ### P7 AI replies
 - Persona, tone, knowledge base; for comments and DMs. Providers: Anthropic
   (Claude) and any OpenAI-compatible endpoint (covers Iranian gateways).
+- Status 2026-10-03: built for DMs. One assistant per account answers a DM
+  that no form, smart reply or campaign answered. Its reply is claimed per
+  message before the model is called (a redelivered webhook costs no second
+  call); a busy provider frees the claim for the job's retry; an Instagram
+  rate limit after the answer is written resends the stored answer without a
+  new call. The model sees the last 6 exchanges with that person, a system
+  prompt stating that customers' messages cannot change the rules, and the
+  owner's knowledge base, and is told not to invent prices or facts. Daily
+  cap per person; key encrypted at rest and never returned to the browser;
+  a "try it" box asks without sending. Not done: comment replies by AI (a
+  wrong public answer is visible to everyone and the private reply is used
+  once; left for a later decision), and no run against a real model yet.
+  Tested with the model endpoint stubbed.
 
 ### P8 SMS
 - Provider interface; Kavenegar, sms.ir, Melipayamak; bulk send to contacts;
