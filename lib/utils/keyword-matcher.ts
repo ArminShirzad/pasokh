@@ -226,3 +226,27 @@ export function matchKeywords(
 
   return { matched: false, matchedKeyword: null };
 }
+
+function canonical(text: string): string {
+  return foldDiacritics(stripSpecialCharacters(normalizeArabicScript(text))).toLowerCase();
+}
+
+/**
+ * Exact match (Directam's «برابر»): the whole message, once normalised, equals
+ * one of the keywords. Normalisation is the same as matchKeywords, so an
+ * Arabic-keyboard «سلام» or a trailing «!» or emoji still matches «سلام»,
+ * while «سلام خوبی؟» does not.
+ */
+export function matchExact(text: string, keywords: string[]): KeywordMatchResult {
+  const cleanedText = canonical(text);
+  if (!cleanedText) return { matched: false, matchedKeyword: null };
+  for (const keyword of keywords) {
+    const cleanedKeyword = canonical(keyword);
+    if (!cleanedKeyword) continue;
+    const numericLike = isNumericLikeKeyword(cleanedKeyword);
+    const a = numericLike ? foldNumericHomoglyphs(cleanedText) : cleanedText;
+    const b = numericLike ? foldNumericHomoglyphs(cleanedKeyword) : cleanedKeyword;
+    if (a === b) return { matched: true, matchedKeyword: keyword };
+  }
+  return { matched: false, matchedKeyword: null };
+}

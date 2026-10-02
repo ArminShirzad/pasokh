@@ -54,6 +54,7 @@ import { TRACKED_LINK_ORDER } from "@/lib/tracking/link-order";
 import { defaultFollowButtonLabel, defaultFollowPrompt } from "@/lib/automation/default-copy";
 import { claimCommentAnswer, expectCommentAnswer, releaseCommentAnswer, withContinuePrompt } from "@/lib/conversations/sessions";
 import { touchContact } from "@/lib/contacts/touch";
+import { COMMAND_PAYLOAD, activeCommandsFor, commandFromPayload, pickCommand, runCommand } from "@/lib/commands/engine";
 
 import { ZernioApiError } from "@/lib/zernio/client";
 
@@ -978,6 +979,20 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
     });
   }
 
+  if (COMMAND_PAYLOAD.test(payload)) {
+    if (fallback) return;
+    const target = await commandFromPayload(payload, instagramAccountId);
+    if (target) {
+      await runCommand({
+        command: target,
+        igsid: userId,
+        triggerMessageId: `tap:${job.data.mid ?? job.id}`,
+        triggerText: payload,
+      });
+    }
+    return;
+  }
+
   const isFollowCheck = payload.startsWith("followcheck:");
   if (!isFollowCheck && !payload.startsWith("reveal:")) return;
   // The opening DM's button appends ":open" to the payload; the follow
@@ -1394,6 +1409,21 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     return;
   }
 
+  // A quick reply that runs a command (menus: «تهران» → the Tehran command).
+  if (quickReply && COMMAND_PAYLOAD.test(quickReply)) {
+    const target = await commandFromPayload(quickReply, instagramAccountId);
+    if (target) {
+      await runCommand({
+        command: target,
+        igsid: senderId,
+        triggerMessageId: `tap:${messageId}`,
+        triggerText: messageText,
+        username: job.data.senderUsername ?? null,
+      });
+    }
+    return;
+  }
+
   // The answer to a text-first comment reply: continue that campaign exactly
   // as if they had tapped its button, and do not also treat the answer as a
   // new keyword message ("ok" should not trigger some other campaign).
@@ -1428,10 +1458,28 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     return;
   }
 
-  // A sticker, shared post or story mention has no words to match. Keyword
-  // campaigns (including "any word") stay text-only until story and mention
-  // triggers get their own settings (P2), so that turning this parsing on
-  // does not suddenly answer every sticker.
+  // Smart-reply commands come before campaign DM triggers: the most specific
+  // matching command answers, and the message is not also matched against
+  // campaigns, so one message never gets two automated answers.
+  const command = pickCommand(await activeCommandsFor(instagramAccountId, job.data.accountConnectionId), {
+    text: messageText,
+    storyId: job.data.storyId,
+    isStoryMention: job.data.isStoryMention,
+  });
+  if (command) {
+    await runCommand({
+      command,
+      igsid: senderId,
+      triggerMessageId: messageId,
+      triggerText: messageText || (job.data.isStoryMention ? "(story mention)" : "(attachment)"),
+      username: job.data.senderUsername ?? null,
+    });
+    return;
+  }
+
+  // A sticker, shared post or story mention has no words to match, so
+  // keyword campaigns (including "any word") only see text; commands above
+  // are where story mentions get answered.
   if (!messageText.trim()) return;
 
   const automations = await prisma.automation.findMany({

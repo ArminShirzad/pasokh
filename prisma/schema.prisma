@@ -89,6 +89,7 @@ model Workspace {
   webhookEvents     WebhookEvent[]
   operationalEvents OperationalEvent[]
   mediaAssets       MediaAsset[]
+  commands          Command[]
 
   @@index([ownerId])
 }
@@ -152,6 +153,7 @@ model InstagramAccount {
   contacts          Contact[]
   simulatorEvents   SimulatorEvent[]
   simulatorFans     SimulatorFan[]
+  commands          Command[]
 
   @@index([workspaceId])
 }
@@ -530,4 +532,58 @@ model SimulatorFan {
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
 
   @@unique([instagramAccountId, igsid])
+}
+
+/// Smart reply («پاسخ هوشمند»): when someone DMs, replies to a story or
+/// mentions the account, send these responses. Responses are OutboundMessage
+/// objects (lib/messages/outbound.ts); a button or quick reply with payload
+/// "cmd:<id>" runs another command, which is how menus chain.
+model Command {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  name               String
+  isActive           Boolean  @default(true)
+  /// EXACT: the whole message equals a keyword. CONTAINS: a keyword appears as
+  /// a word in it.
+  matchMode          String   @default("EXACT")
+  keywords           String[] @default([])
+  /// ALL: DMs and replies to any story. ANY_STORY: only story replies.
+  /// SPECIFIC: only replies to the stories in storyIds; with no keywords,
+  /// any reply to those stories.
+  storyScope         String   @default("ALL")
+  storyIds           String[] @default([])
+  onStoryMention     Boolean  @default(false)
+  /// React with a heart to the message that triggered it.
+  likeTrigger        Boolean  @default(false)
+  responses          Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  runs             CommandRun[]
+
+  @@index([instagramAccountId, isActive])
+}
+
+/// One execution of a command for one trigger message. The unique key makes
+/// a redelivered webhook or a retried job run the command once; `sent` counts
+/// responses already delivered so a retry continues instead of repeating.
+model CommandRun {
+  id               String   @id @default(cuid())
+  commandId        String
+  contactIgsid     String
+  triggerMessageId String
+  triggerText      String
+  status           String   @default("RUNNING")
+  sent             Int      @default(0)
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  command Command @relation(fields: [commandId], references: [id], onDelete: Cascade)
+
+  @@unique([commandId, triggerMessageId])
+  @@index([commandId, createdAt])
 }

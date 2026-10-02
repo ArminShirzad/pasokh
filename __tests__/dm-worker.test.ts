@@ -46,6 +46,10 @@ const {
     contact: {
       upsert: vi.fn(),
     },
+    command: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
   },
   mockSendPrivateReply: vi.fn(),
   mockSendPrivateReplyWithLinkButton: vi.fn(),
@@ -255,6 +259,8 @@ beforeEach(() => {
   mockPrisma.conversationSession.updateMany.mockReset().mockResolvedValue({ count: 1 });
   mockPrisma.conversationSession.upsert.mockReset().mockResolvedValue({});
   mockPrisma.contact.upsert.mockReset().mockResolvedValue({});
+  mockPrisma.command.findMany.mockReset().mockResolvedValue([]);
+  mockPrisma.command.findFirst.mockReset().mockResolvedValue(null);
   mockDecryptToken.mockReturnValue("decrypted_token");
   mockMatchKeywords.mockReturnValue({ matched: true, matchedKeyword: "LINK" });
   mockReserveWorkspaceDMSend.mockResolvedValue({
