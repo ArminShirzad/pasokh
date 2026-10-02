@@ -685,6 +685,16 @@ export async function getUserMedia(
   return data.data;
 }
 
+/** The account's stories that are live now (Instagram keeps them 24 hours). */
+export async function getActiveStories(accessToken: string): Promise<InstagramMedia[]> {
+  const url = new URL(`${instagramGraphBase()}/me/stories`);
+  url.searchParams.set("fields", "id,media_type,media_url,thumbnail_url,permalink,timestamp");
+  url.searchParams.set("access_token", accessToken);
+  const response = await fetch(url.toString());
+  const data = await handleResponse<{ data: InstagramMedia[] }>(response);
+  return data.data;
+}
+
 /**
  * Fetch media by following pagination cursors until `max` items are collected
  * or there are no more pages. Pass a large `max` for an "all time" view; the

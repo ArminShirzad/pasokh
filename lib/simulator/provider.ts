@@ -28,6 +28,10 @@ export const SIM_POSTS: InstagramMedia[] = [
   { id: "sim_post_3", caption: "پست تست ۳", media_type: "IMAGE", timestamp: "2026-10-02T08:00:00Z" },
 ];
 
+export const SIM_STORIES: InstagramMedia[] = [
+  { id: "sim_story_1", caption: "استوری تست", media_type: "IMAGE", media_product_type: "STORY", timestamp: "2026-10-02T10:00:00Z" },
+];
+
 async function fanByIgsid(context: SimulatorContext, igsid: string) {
   return prisma.simulatorFan.findUnique({
     where: { instagramAccountId_igsid: { instagramAccountId: context.connectionId, igsid } },

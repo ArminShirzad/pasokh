@@ -123,6 +123,24 @@ export async function getAllUserMedia({
     : getUserMedia({ context, limit: max });
 }
 
+/** Live stories, for scoping a command to replies on one of them. */
+export async function getActiveStories({ context }: { context: InstagramContext }): Promise<meta.InstagramMedia[]> {
+  if (context.provider === "SIMULATOR") return sim.SIM_STORIES;
+  if (context.provider === "META") return meta.getActiveStories(context.accessToken);
+  const result = await zernioRequest<{
+    data: { id: string; mediaType?: string | null; mediaUrl?: string | null; thumbnailUrl?: string | null; permalink?: string | null; timestamp?: string | null }[];
+  }>({ apiKey: context.apiKey, path: `/accounts/${encodeURIComponent(context.accountId)}/instagram/stories` });
+  return result.data.map((s) => ({
+    id: s.id,
+    media_type: s.mediaType ?? "IMAGE",
+    media_product_type: "STORY",
+    ...(s.mediaUrl ? { media_url: s.mediaUrl } : {}),
+    ...(s.thumbnailUrl ? { thumbnail_url: s.thumbnailUrl } : {}),
+    ...(s.permalink ? { permalink: s.permalink } : {}),
+    timestamp: s.timestamp ?? new Date().toISOString(),
+  }));
+}
+
 export async function getUserInfo({
   context,
 }: {
