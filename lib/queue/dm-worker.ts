@@ -51,6 +51,8 @@ import {
   renderMessageWithoutLink,
 } from "@/lib/tracking/message";
 import { TRACKED_LINK_ORDER } from "@/lib/tracking/link-order";
+import { defaultFollowButtonLabel, defaultFollowPrompt } from "@/lib/automation/default-copy";
+import { claimCommentAnswer, expectCommentAnswer, releaseCommentAnswer, withContinuePrompt } from "@/lib/conversations/sessions";
 
 import { ZernioApiError } from "@/lib/zernio/client";
 
@@ -174,6 +176,30 @@ function buildInlineLinkFallback(
     .slice(1)
     .map((link) => buildTrackedUrl(link.slug));
   return extraUrls.length > 0 ? `${base}\n${extraUrls.join("\n")}` : base;
+}
+
+/**
+ * The DM text with every tracked link written out, for a private reply that
+ * cannot carry buttons. Unlike buildInlineLinkFallback, it does not rely on the
+ * message containing {link} or the destination URL: campaigns usually deliver
+ * the link as a button, so the text alone would arrive without it. Each link
+ * not already in the text goes on its own line, labelled like its button.
+ */
+export function buildInlineLinks(
+  message: string,
+  commenterName: string | null | undefined,
+  trackedLinks: WorkerTrackedLink[],
+  primaryLabel: string | null
+): string {
+  const rendered = renderMessageWithTracking({ message, commenterName, trackedLinks }).trim();
+  const lines = rendered ? [rendered] : [];
+  trackedLinks.slice(0, 3).forEach((link, index) => {
+    const url = buildTrackedUrl(link.slug);
+    if (rendered.includes(url)) return;
+    const label = index === 0 ? primaryLabel : link.label;
+    lines.push(label ? `${label}: ${url}` : url);
+  });
+  return lines.join("\n");
 }
 
 type RevealAutomation = {
@@ -621,22 +647,31 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       Boolean(automation.openingDmMessage) &&
       Boolean(automation.openingDmButtonLabel);
 
+    // Instagram refuses buttons, cards and attachments in a private reply to a
+    // commenter who does not follow the account (since late August 2026; Meta
+    // code 2, subcode 1545133), and the refused call still uses up the
+    // comment's single private reply, so nothing can be sent after it. Only a
+    // confirmed follower therefore gets a rich private reply. Everyone else gets
+    // plain text: the opening message or follow prompt with "reply to
+    // continue", replayed as a button tap when they answer (their answer opens
+    // a normal DM thread, where buttons work), or the link inline.
+    //
+    // Follow status for a commenter is usually unknown (Instagram reports it
+    // only once the person has messaged the account), and unknown is treated
+    // as not following here: guessing wrong burns the only reply.
+    const wantsRichReply =
+      useOpeningDm || automation.requireFollow || automation.trackedLinks.length > 0;
+    const confirmedFollower = wantsRichReply
+      ? (await getUserFollowStatus({ context: accessToken, recipientId: commenterId })) === true
+      : false;
     // Follow-gating: the link is revealed only after a follow. When an opening
-    // DM is enabled it comes FIRST, and its button routes into the follow check
-    // (opening DM → follow gate → link). Without an opening DM, we check follow
-    // status at comment time: confirmed followers get the link now, everyone
-    // else gets the "follow me first" prompt (re-verified on tap).
-    let sendFollowPrompt = false;
-    if (automation.requireFollow && !useOpeningDm) {
-      const alreadyFollows = await getUserFollowStatus({
-        context: accessToken,
-        recipientId: commenterId,
-      });
-      sendFollowPrompt =
-        accessToken.provider === "ZERNIO"
-          ? alreadyFollows === false
-          : alreadyFollows !== true;
-    }
+    // DM is enabled it comes FIRST and routes into the follow check (opening DM
+    // → follow gate → link). Without one, a confirmed follower gets the link
+    // now and everyone else the "follow me first" prompt, re-verified when they
+    // answer.
+    const sendFollowPrompt = automation.requireFollow && !useOpeningDm && !confirmedFollower;
+    // Set when the reply was text-first: what their answer should trigger.
+    let continuePayload: string | null = null;
 
     let claimed;
     try {
@@ -659,31 +694,55 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           commenterName,
           trackedLinks: [],
         });
-        await sendPrivateReplyWithButton({
-          context: accessToken,
-          instagramAccountId: automation.instagramAccount.instagramId,
-          commentId: commentId,
-          text: openingText,
-          buttonTitle: automation.openingDmButtonLabel as string,
-          // The ":open" marker tells a tap here apart from the follow prompt's
-          // own "I'm following" button, which sends the same prefix.
-          payload: `${automation.requireFollow ? "followcheck" : "reveal"}:${automation.id}:open`,
-          postId: mediaId,
-        });
+        // The ":open" marker tells a tap here apart from the follow prompt's
+        // own "I'm following" button, which sends the same prefix.
+        const openingPayload = `${automation.requireFollow ? "followcheck" : "reveal"}:${automation.id}:open`;
+        if (confirmedFollower) {
+          await sendPrivateReplyWithButton({
+            context: accessToken,
+            instagramAccountId: automation.instagramAccount.instagramId,
+            commentId: commentId,
+            text: openingText,
+            buttonTitle: automation.openingDmButtonLabel as string,
+            payload: openingPayload,
+            postId: mediaId,
+          });
+        } else {
+          await sendPrivateReply({
+            context: accessToken,
+            instagramAccountId: automation.instagramAccount.instagramId,
+            commentId: commentId,
+            message: withContinuePrompt(openingText),
+            postId: mediaId,
+          });
+          continuePayload = openingPayload;
+        }
       } else if (sendFollowPrompt) {
         const promptText = renderMessageWithoutLink({
-          message:
-            automation.followPromptMessage ||
-            "quick favor before i send your link. i don't make any money from this, it's free. if you want to support me, just don't unfollow after, and star the repo on github if it helps you. tap the button once you're following and i'll send it over",
+          message: automation.followPromptMessage || defaultFollowPrompt(),
           commenterName,
         });
-        await sendPrivateReplyWithButton({
+        await sendPrivateReply({
           context: accessToken,
           instagramAccountId: automation.instagramAccount.instagramId,
           commentId: commentId,
-          text: promptText,
-          buttonTitle: automation.followPromptButtonLabel || "i'm following",
-          payload: `followcheck:${automation.id}`,
+          message: withContinuePrompt(promptText),
+          postId: mediaId,
+        });
+        continuePayload = `followcheck:${automation.id}`;
+      } else if (automation.trackedLinks.length > 0 && !confirmedFollower) {
+        // Not a confirmed follower: link buttons would be refused, so the
+        // tracked links go inline as text and arrive without waiting.
+        await sendPrivateReply({
+          context: accessToken,
+          instagramAccountId: automation.instagramAccount.instagramId,
+          commentId: commentId,
+          message: buildInlineLinks(
+            automation.dmMessage,
+            commenterName,
+            automation.trackedLinks,
+            automation.linkButtonLabel,
+          ),
           postId: mediaId,
         });
       } else if (automation.trackedLinks.length > 0) {
@@ -765,6 +824,29 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           errorMessage: null,
         },
       });
+      if (continuePayload) {
+        // The reply went out; failing to remember the follow-up must not turn
+        // it into a failed send (which would be retried into a duplicate). It
+        // is recorded so the gap is visible: their answer will get no reply.
+        await expectCommentAnswer({
+          instagramAccountId: automation.instagramAccountId,
+          contactId: commenterId,
+          automationId: automation.id,
+          payload: continuePayload,
+        }).catch((sessionError) =>
+          prisma.operationalEvent
+            .create({
+              data: {
+                workspaceId: automation.workspaceId,
+                source: "WORKER",
+                level: "ERROR",
+                message: "Text-first comment reply sent, but its continuation could not be saved",
+                payload: { automationId: automation.id, commenterId, error: formatError(sessionError) },
+              },
+            })
+            .catch(() => {})
+        );
+      }
     } catch (error) {
       const sendError = classifySendError(error);
       // Retain reservations if the provider may have delivered the message.
@@ -1038,8 +1120,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
 
       const promptText = renderMessageWithoutLink({
         message:
-          automation.followPromptMessage ||
-          "quick favor before i send your link. i don't make any money from this, it's free. if you want to support me, just don't unfollow after, and star the repo on github if it helps you. tap the button once you're following and i'll send it over",
+          automation.followPromptMessage || defaultFollowPrompt(),
         commenterName,
       });
       try {
@@ -1052,7 +1133,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
               userId: userId,
               text: promptText,
               buttonTitle:
-                automation.followPromptButtonLabel || "i'm following",
+                automation.followPromptButtonLabel || defaultFollowButtonLabel(),
               payload: `followcheck:${automation.id}`,
             }),
         });
@@ -1265,6 +1346,40 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
 async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
   const { instagramAccountId, messageId, messageText, senderId } = job.data;
 
+  // The answer to a text-first comment reply: continue that campaign exactly
+  // as if they had tapped its button, and do not also treat the answer as a
+  // new keyword message ("ok" should not trigger some other campaign).
+  const resumed = await claimCommentAnswer({
+    instagramId: instagramAccountId,
+    accountConnectionId: job.data.accountConnectionId,
+    contactId: senderId,
+  });
+  if (resumed) {
+    try {
+      await getDMQueue().add(
+        POSTBACK_JOB_NAME,
+        {
+          instagramAccountId,
+          accountConnectionId: resumed.instagramAccountId,
+          userId: senderId,
+          payload: resumed.payload,
+          // Their message stands in for the tap; its id dedupes the delivery.
+          mid: messageId,
+        },
+        {
+          jobId: `resume_${instagramAccountId}_${Buffer.from(messageId).toString("base64url")}`,
+        }
+      );
+    } catch (error) {
+      // Nothing was queued, so hand the claim back for this job's retry;
+      // otherwise the retry would find no session and their answer would go
+      // unanswered.
+      await releaseCommentAnswer(resumed.id);
+      throw error;
+    }
+    return;
+  }
+
   const automations = await prisma.automation.findMany({
     where: {
       ...connectionScope(job.data),
@@ -1426,8 +1541,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
       if (sendFollowPrompt) {
         const promptText = renderMessageWithoutLink({
           message:
-            automation.followPromptMessage ||
-            "Almost there! Follow me and tap the button below to grab your link 💛",
+            automation.followPromptMessage || defaultFollowPrompt(),
           commenterName,
         });
         await sendDirectMessageWithButton({
@@ -1435,7 +1549,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
           instagramAccountId: automation.instagramAccount.instagramId,
           userId: senderId,
           text: promptText,
-          buttonTitle: automation.followPromptButtonLabel || "I'm following ✅",
+          buttonTitle: automation.followPromptButtonLabel || defaultFollowButtonLabel(),
           payload: `followcheck:${automation.id}`,
         });
       } else {

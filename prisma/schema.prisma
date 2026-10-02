@@ -147,6 +147,7 @@ model InstagramAccount {
   dmLogs      DmLog[]
   linkClicks  LinkClick[]
   followerSnapshots FollowerSnapshot[]
+  conversationSessions ConversationSession[]
 
   @@index([workspaceId])
 }
@@ -418,4 +419,29 @@ model ZernioConnection {
 model PostbackDelivery {
   id String @id
   createdAt DateTime @default(now())
+}
+
+/// What the next inbound DM from a person means when it is the answer to
+/// something Pasokh asked, rather than a fresh message to match against
+/// keywords. Created for a comment's text-only private reply ("reply to get
+/// the link"); forms and other multi-step flows reuse it.
+model ConversationSession {
+  id                 String    @id @default(cuid())
+  /// InstagramAccount.id: the connection, not the Instagram user id.
+  instagramAccountId String
+  /// The person's Instagram-scoped id (IGSID).
+  contactId          String
+  kind               String
+  automationId       String
+  /// Postback payload replayed when they answer, as if they had tapped it.
+  payload            String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  expiresAt          DateTime
+  consumedAt         DateTime?
+
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([instagramAccountId, contactId, kind, automationId])
+  @@index([instagramAccountId, contactId, consumedAt])
 }

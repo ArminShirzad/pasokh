@@ -824,6 +824,9 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
                   maxLength={64}
                 />
+                <p className="text-xs leading-relaxed text-muted">
+                  {t("Instagram only allows a button here for people who already follow you. Everyone else gets this message as text with a line asking them to reply, and the button's next step runs when they do.")}
+                </p>
               </div>
             )}
           </div>
@@ -855,7 +858,7 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
                   maxLength={20}
                 />
                 <p className="text-xs text-muted">
-                  {t("We send the link only after they tap the button and Instagram confirms the follow. If it can't be verified, we send it anyway.")}
+                  {t("Followers get the link right away. Anyone else gets a plain-text reply asking them to follow and answer; when they answer, we check the follow and send the link.")}
                 </p>
               </div>
             )}
