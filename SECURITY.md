@@ -1,40 +1,37 @@
 # Security policy
 
-OpenReply handles Instagram access tokens, webhook payloads, and campaign data. Please report security issues responsibly.
-
-## Supported versions
-
-The active branch is `main`. Security fixes target `main` unless a maintainer asks otherwise.
+Pasokh stores Instagram and Zernio credentials, webhook payloads, DMs and the
+people who sent them. Please report security problems privately.
 
 ## Reporting a vulnerability
 
-Do not open a public GitHub issue for a vulnerability. Send a private report to the repository owner through GitHub, or email the address on the maintainer's GitHub profile.
+Use GitHub's private reporting: **Security → Report a vulnerability** on this
+repository. Do not open a public issue for a vulnerability.
 
-Include a description, steps to reproduce, the impact, whether tokens or user data may be exposed, and a suggested fix if you have one.
+Include what an attacker can do, the steps to reproduce, and the version
+(image tag or commit). You will get an answer within a week.
 
-## Sensitive areas
+## Supported versions
 
-The parts most worth scrutiny:
+Fixes go into the latest release. Update with:
 
-- Instagram OAuth state verification
-- Encrypted Instagram access tokens
-- Meta webhook signature verification
-- Workspace isolation
-- Public report pages
-- Tracked link redirects
-- Worker retry and dedupe behavior
-- Environment variable handling
+```bash
+cd ~/pasokh && docker compose pull && docker compose up -d
+```
 
-## Secrets
+## What the project already does
 
-Never commit any of these, and rotate one if it is exposed anywhere it could be logged:
+- Instagram and Zernio keys are encrypted at rest with `ENCRYPTION_KEY`.
+- Meta and Zernio webhooks are verified by signature before they are processed.
+- Passwords are hashed with scrypt; failed sign-ins are rate-limited per email
+  and per address.
+- There is no sign-up: accounts are created only by first-run setup and
+  invitations.
 
-- `DATABASE_URL`, `REDIS_URL`
-- `NEXTAUTH_SECRET`, `CRON_SECRET`, `ENCRYPTION_KEY`
-- `RESEND_API_KEY`
-- `INSTAGRAM_APP_SECRET`, `FACEBOOK_APP_SECRET`
-- Live webhook payloads that contain user data
+## What you are responsible for
 
-## Disclosure
-
-Valid reports get acknowledged quickly, and fixes are prioritized by severity.
+- Keep `.env` private and backed up; anyone with it can decrypt stored keys.
+- Keep the server updated, and expose only the ports your mode needs (none
+  for tunnels; 80 and 443 for the domain mode).
+- Rotate a key that was pasted somewhere it could be logged, including a chat
+  with an AI assistant.
