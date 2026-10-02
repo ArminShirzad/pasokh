@@ -23,7 +23,18 @@ const pageTitles: Record<string, StaticMessageKey> = {
   "/logs": "DM Logs",
   "/settings": "Settings",
   "/diagnostics": "Diagnostics",
+  "/commands": "Smart reply",
+  "/showcases": "Showcase",
+  "/welcome": "Welcome message",
+  "/simulator": "Test lab",
 };
+
+// Pages under a section take its title (an editor at /commands/abc is still
+// Smart reply), so a new page cannot fall through to "Dashboard".
+const sectionTitles: [string, StaticMessageKey][] = [
+  ["/commands/", "Smart reply"],
+  ["/showcases/", "Showcase"],
+];
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -38,10 +49,11 @@ export default function TopBar({
 }: TopBarProps) {
   const { t } = useI18n();
   const pathname = usePathname();
-  const title: StaticMessageKey = pageTitles[pathname] ?? (
-    pathname.endsWith("/edit") ? "Edit campaign"
-      : pathname.startsWith("/campaigns/") ? "Campaign details" : "Dashboard"
-  );
+  const title: StaticMessageKey = pageTitles[pathname] ??
+    sectionTitles.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? (
+      pathname.endsWith("/edit") ? "Edit campaign"
+        : pathname.startsWith("/campaigns/") ? "Campaign details" : "Dashboard"
+    );
 
   return (
     <header
