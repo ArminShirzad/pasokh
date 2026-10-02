@@ -34,6 +34,10 @@ password.
   one specific story, story mentions; answers of text, image, video, voice,
   file, or product cards, with buttons and quick-reply menus that open other
   replies; a heart on their message. A comment campaign can hand off to one.
+- **Showcase**: product carousels (photo, title, description, buttons) kept in
+  one place; every smart reply that shows one sends its current version.
+- **Welcome message**: up to four questions Instagram shows on a new chat,
+  each answered by a smart reply; sent to Instagram from the dashboard.
 - **Test lab**: try every flow with a pretend follower, no Instagram needed;
   it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
@@ -42,9 +46,8 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): welcome messages (ice
-breakers); timed follow-up sequences; a conversational form builder; AI
-replies; SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): timed follow-up
+sequences; a conversational form builder; AI replies; SMS.
 
 ## Install
 

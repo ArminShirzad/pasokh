@@ -185,6 +185,18 @@ Each phase lists what "done" means.
 ### P4 Showcase and welcome
 - Card / carousel builder; ice breakers synced to the account, each mapped to a
   command.
+- Status 2026-10-02: built. A showcase is a named carousel of up to 10
+  products on one account; smart replies add it as a response and send its
+  cards as they are at send time (a deleted showcase fails the run with that
+  reason; deleting one still shown is refused). Welcome questions (up to 4,
+  80 characters) each open a smart reply; saving pushes them to Meta
+  (`messenger_profile`) or Zernio (`instagram-ice-breakers`), keeps the error
+  if Instagram refuses, and a tap arrives as an ordinary `cmd:` postback.
+  Deleting a smart reply a question opens is refused. Proven in the test
+  lab, which shows the questions on an empty chat, and in database tests
+  through the real worker. Not yet verified: either provider's ice-breaker
+  call against a real account (request bodies follow Meta's docs and
+  Zernio's OpenAPI schema, read 2026-10-02).
 
 ### P5 Smart support (sequences)
 - Trigger → N steps with delays; stops on reply (optional); respects the
