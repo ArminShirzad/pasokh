@@ -338,6 +338,43 @@ export async function sendPrivateReplyWithLinkButton(
 }
 
 /**
+ * Generic send: any `message` body (see lib/messages/outbound.ts toMetaMessage)
+ * to a person (`{ id }`) or as the private reply to a comment (`{ comment_id }`).
+ */
+export async function sendMessage(
+  accessToken: string,
+  instagramAccountId: string,
+  recipient: { id: string } | { comment_id: string },
+  message: Record<string, unknown>
+): Promise<{ recipient_id: string; message_id: string }> {
+  const response = await fetch(`${instagramGraphBase()}/${instagramAccountId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ recipient, message }),
+  });
+  return handleResponse(response);
+}
+
+/** Puts a heart on one of their messages; the only reaction Instagram's API offers. */
+export async function reactToMessage(
+  accessToken: string,
+  instagramAccountId: string,
+  userId: string,
+  messageId: string
+): Promise<void> {
+  const response = await fetch(`${instagramGraphBase()}/${instagramAccountId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      recipient: { id: userId },
+      sender_action: "react",
+      payload: { message_id: messageId, reaction: "love" },
+    }),
+  });
+  await handleResponse(response);
+}
+
+/**
  * Send a plain-text direct message to a user by their Instagram-scoped ID.
  * Used to deliver the reveal message after a button postback.
  */

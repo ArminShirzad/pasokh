@@ -6,6 +6,7 @@ import {
   ZernioDeliveryUnconfirmedError,
 } from "@/lib/zernio/client";
 import type { InstagramContext, ZernioContext } from "./context";
+import { toMetaMessage, toZernioBody, validateOutbound, type OutboundMessage } from "@/lib/messages/outbound";
 
 type Button =
   | { type: "url"; title: string; url: string }
@@ -26,14 +27,32 @@ async function sendZernioMessage({
   text: string;
   buttons?: Button[];
 }) {
+  return postZernioMessage({
+    context,
+    recipientId,
+    commentId,
+    postId,
+    fields: { message: buttons ? text.slice(0, 640) : text, ...(buttons ? { buttons } : {}) },
+  });
+}
+
+async function postZernioMessage({
+  context,
+  recipientId,
+  commentId,
+  postId,
+  fields,
+}: {
+  context: ZernioContext;
+  recipientId?: string;
+  commentId?: string;
+  postId?: string;
+  fields: Record<string, unknown>;
+}) {
   const path = commentId
     ? `/inbox/comments/${encodeURIComponent(postId ?? commentId)}/${encodeURIComponent(commentId)}/private-reply`
     : `/inbox/conversations/${encodeURIComponent(recipientId!)}/messages`;
-  const body = {
-    accountId: context.accountId,
-    message: buttons ? text.slice(0, 640) : text,
-    ...(buttons ? { buttons } : {}),
-  };
+  const body = { accountId: context.accountId, ...fields };
   const idempotencyKey = createHash("sha256")
     .update(
       JSON.stringify({
@@ -269,4 +288,75 @@ export async function sendCommentReply({
   });
   if (!result?.data?.commentId) throw new ZernioDeliveryUnconfirmedError();
   return { id: result.data.commentId };
+}
+
+/** Where a message goes: an open DM thread, or the private reply to a comment. */
+export type Recipient = { userId: string } | { commentId: string; postId?: string };
+
+/**
+ * Sends one OutboundMessage (text with buttons or quick replies, media, or
+ * cards) through the account's provider. Validate with validateOutbound()
+ * before saving a message; this throws on an invalid one rather than let the
+ * provider reject it with a less useful error.
+ */
+export async function sendOutboundMessage({
+  context,
+  instagramAccountId,
+  recipient,
+  message,
+}: {
+  context: InstagramContext;
+  instagramAccountId: string;
+  recipient: Recipient;
+  message: OutboundMessage;
+}): Promise<{ message_id: string; recipient_id?: string }> {
+  const problems = validateOutbound(message);
+  if (problems.length) throw new Error(`Invalid message: ${problems.map((p) => `${p.path}: ${p.message}`).join("; ")}`);
+  if ("commentId" in recipient && message.type !== "text") {
+    // Neither API takes media or cards in a private reply.
+    throw new Error("A private reply to a comment can only be text, with buttons or quick replies.");
+  }
+  if (context.provider === "META") {
+    return meta.sendMessage(
+      context.accessToken,
+      instagramAccountId,
+      "commentId" in recipient ? { comment_id: recipient.commentId } : { id: recipient.userId },
+      toMetaMessage(message)
+    );
+  }
+  return postZernioMessage({
+    context,
+    ...("commentId" in recipient
+      ? { commentId: recipient.commentId, postId: recipient.postId }
+      : { recipientId: recipient.userId }),
+    fields: toZernioBody(message),
+  });
+}
+
+/**
+ * Reacts to one of their messages (Directam's "like the trigger message").
+ * Meta's Instagram API only offers the heart; Zernio takes any emoji, so the
+ * heart is used on both for the same result.
+ */
+export async function reactToMessage({
+  context,
+  instagramAccountId,
+  userId,
+  messageId,
+}: {
+  context: InstagramContext;
+  instagramAccountId: string;
+  userId: string;
+  messageId: string;
+}): Promise<void> {
+  if (context.provider === "META") {
+    await meta.reactToMessage(context.accessToken, instagramAccountId, userId, messageId);
+    return;
+  }
+  await zernioRequest({
+    apiKey: context.apiKey,
+    path: `/inbox/conversations/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+    method: "POST",
+    body: { accountId: context.accountId, emoji: "❤️" },
+  });
 }
