@@ -91,6 +91,7 @@ model Workspace {
   mediaAssets       MediaAsset[]
   commands          Command[]
   showcases         Showcase[]
+  sequences         Sequence[]
 
   @@index([ownerId])
 }
@@ -156,6 +157,7 @@ model InstagramAccount {
   simulatorFans        SimulatorFan[]
   commands             Command[]
   showcases            Showcase[]
+  sequences            Sequence[]
   iceBreakers          IceBreaker[]
   /// Last time the welcome questions were pushed to Instagram, and the
   /// error if that push failed (Instagram keeps showing the old ones then).
@@ -571,11 +573,15 @@ model Command {
   /// React with a heart to the message that triggered it.
   likeTrigger        Boolean  @default(false)
   responses          Json
+  /// After its messages are delivered, the person is enrolled in this
+  /// sequence (smart support: follow-ups with delays).
+  sequenceId         String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  sequence         Sequence?        @relation(fields: [sequenceId], references: [id], onDelete: SetNull)
   runs             CommandRun[]
   automations      Automation[]
   iceBreakers      IceBreaker[]
@@ -638,4 +644,48 @@ model IceBreaker {
   command          Command          @relation(fields: [commandId], references: [id], onDelete: Restrict)
 
   @@unique([instagramAccountId, position])
+}
+
+/// Smart support: messages sent one after another with delays, to a person a
+/// smart reply enrolled. steps: [{ delayMinutes, response: StoredResponse }],
+/// each delay counted from the previous step (the first from enrollment).
+model Sequence {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  name               String
+  isActive           Boolean  @default(true)
+  /// Stop as soon as the person writes or taps anything after enrolling.
+  stopOnReply        Boolean  @default(true)
+  steps              Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace        Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount     @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  commands         Command[]
+  enrollments      SequenceEnrollment[]
+
+  @@index([instagramAccountId])
+}
+
+/// One person going through a sequence. nextStep is claimed (advanced)
+/// before a step is sent, so a redelivered job never sends it twice.
+model SequenceEnrollment {
+  id         String    @id @default(cuid())
+  sequenceId String
+  igsid      String
+  username   String?
+  /// ACTIVE | DONE | STOPPED | FAILED | UNCONFIRMED
+  status     String    @default("ACTIVE")
+  nextStep   Int       @default(0)
+  startedAt  DateTime  @default(now())
+  nextAt     DateTime?
+  stopReason String?
+  updatedAt  DateTime  @updatedAt
+
+  sequence Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, igsid])
+  @@index([status, nextAt])
 }

@@ -45,6 +45,7 @@ vi.mock("@/lib/queue/client", () => ({
   POSTBACK_JOB_NAME: "process-postback",
   FOLLOWUP_JOB_NAME: "process-followup",
   MESSAGE_JOB_NAME: "process-message",
+  SEQUENCE_JOB_NAME: "process-sequence-step",
 }));
 vi.mock("@/lib/utils/rate-limiter", () => ({
   reserveDMSlot: async () => ({ allowed: true, reserved: false }),
@@ -68,12 +69,22 @@ let sql: Client;
 let accountId: string;
 let process_: (job: unknown) => Promise<void>;
 
-/** Runs queued jobs (and the jobs they queue) until none are left. Delayed jobs run too. */
-async function drain(): Promise<void> {
+/**
+ * Runs queued jobs (and the jobs they queue) until none are left. Delayed jobs
+ * run too, unless their name is in `hold`: those stay queued, so a test can
+ * act before a delayed step comes due.
+ */
+async function drain(hold: string[] = []): Promise<void> {
+  const held: QueuedJob[] = [];
   for (let guard = 0; state.jobs.length > 0 && guard < 50; guard++) {
     const job = state.jobs.shift() as QueuedJob;
+    if (hold.includes(job.name)) {
+      held.push(job);
+      continue;
+    }
     await process_({ id: job.id, name: job.name, data: job.data, attemptsMade: 0 });
   }
+  state.jobs.push(...held);
 }
 
 async function act(input: Parameters<typeof runLabAction>[1]) {
@@ -145,6 +156,7 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     await state.db.iceBreaker.deleteMany();
     await state.db.command.deleteMany();
     await state.db.showcase.deleteMany();
+    await state.db.sequence.deleteMany();
     await runLabAction("ws", { action: "reset" });
     accountId = (await ensureLab("ws")).account.id;
   });
@@ -274,5 +286,72 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     const shipping = await command([{ type: "text", text: "x" }]);
     await saveIceBreakers({ instagramAccountId: accountId, items: [{ question: "؟", commandId: shipping.id }] });
     await expect(state.db.command.delete({ where: { id: shipping.id } })).rejects.toThrow();
+  });
+  async function withSequence(steps: { delayMinutes: number; text: string }[], stopOnReply = true) {
+    const sequence = await state.db.sequence.create({
+      data: {
+        workspaceId: "ws",
+        instagramAccountId: accountId,
+        name: "پیگیری",
+        stopOnReply,
+        steps: steps.map((s) => ({ delayMinutes: s.delayMinutes, response: { type: "text", text: s.text } })),
+      },
+    });
+    await state.db.command.create({
+      data: { workspaceId: "ws", instagramAccountId: accountId, name: "قیمت", keywords: ["قیمت"], sequenceId: sequence.id, responses: [{ type: "text", text: "لیست قیمت" }] as never },
+    });
+    return sequence;
+  }
+  const texts = async () => (await sent()).map((e) => (e.body as { text?: string }).text);
+  const STEP = "process-sequence-step";
+
+  it("follows a smart reply with the sequence's steps, in order, then finishes", async () => {
+    const sequence = await withSequence([{ delayMinutes: 10, text: "سؤالی داشتی؟" }, { delayMinutes: 60, text: "تخفیف امروز ۱۰٪" }]);
+    await act({ action: "dm", text: "قیمت" });
+    expect(await texts()).toEqual(["لیست قیمت", "سؤالی داشتی؟", "تخفیف امروز ۱۰٪"]);
+    expect(await state.db.sequenceEnrollment.findFirst({ where: { sequenceId: sequence.id } })).toMatchObject({ status: "DONE", nextStep: 2 });
+  });
+
+  it("stops when they reply, if the sequence says so, instead of talking over the conversation", async () => {
+    const sequence = await withSequence([{ delayMinutes: 30, text: "سؤالی داشتی؟" }]);
+    await runLabAction("ws", { action: "dm", text: "قیمت" });
+    await drain([STEP]);
+    await runLabAction("ws", { action: "dm", text: "مرسی، خریدم" });
+    await drain([STEP]); // their reply is handled; the step is still 30 minutes away
+    await drain();
+    expect(await texts()).toEqual(["لیست قیمت"]);
+    expect(await state.db.sequenceEnrollment.findFirst({ where: { sequenceId: sequence.id } })).toMatchObject({ status: "STOPPED", stopReason: "They replied" });
+  });
+
+  it("does not try a step Instagram would refuse because 24 hours passed since their last message", async () => {
+    const sequence = await withSequence([{ delayMinutes: 25 * 60, text: "فردا" }], false);
+    await runLabAction("ws", { action: "dm", text: "قیمت" });
+    await drain([STEP]);
+    await state.db.contact.updateMany({ data: { lastInboundAt: new Date(Date.now() - 25 * 3600_000) } });
+    await drain();
+    expect(await texts()).toEqual(["لیست قیمت"]);
+    expect(await state.db.sequenceEnrollment.findFirst({ where: { sequenceId: sequence.id } })).toMatchObject({ status: "STOPPED", stopReason: "24-hour messaging window closed" });
+  });
+
+  it("sends a step once when its job is delivered twice", async () => {
+    await withSequence([{ delayMinutes: 5, text: "یک بار" }]);
+    await runLabAction("ws", { action: "dm", text: "قیمت" });
+    await drain([STEP]);
+    const step = state.jobs.find((j) => j.name === STEP)!;
+    state.jobs.push({ ...step });
+    await drain();
+    expect((await texts()).filter((t) => t === "یک بار")).toHaveLength(1);
+  });
+
+  it("does not restart the sequence for someone already part-way through it, which would repeat its early steps", async () => {
+    const sequence = await withSequence([{ delayMinutes: 5, text: "مرحله ۱" }, { delayMinutes: 5, text: "مرحله ۲" }], false);
+    await runLabAction("ws", { action: "dm", text: "قیمت" });
+    await drain([STEP]);
+    await runLabAction("ws", { action: "dm", text: "قیمت" });
+    await drain([STEP]);
+    expect(state.jobs.filter((j) => j.name === STEP)).toHaveLength(1);
+    await drain();
+    expect((await texts()).filter((t) => t?.startsWith("مرحله"))).toEqual(["مرحله ۱", "مرحله ۲"]);
+    expect(await state.db.sequenceEnrollment.count({ where: { sequenceId: sequence.id } })).toBe(1);
   });
 });

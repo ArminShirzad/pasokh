@@ -20,7 +20,7 @@ export const outboundSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("cards"), cards: z.array(cardSchema) }),
 ]);
 
-const responseSchema = z.union([
+export const responseSchema = z.union([
   outboundSchema,
   z.object({ type: z.literal("showcase"), showcaseId: z.string().min(1).max(40) }),
 ]);
@@ -38,6 +38,7 @@ export const commandInputSchema = z.object({
   onStoryMention: z.boolean().default(false),
   likeTrigger: z.boolean().default(false),
   responses: z.array(responseSchema).min(1).max(MAX_RESPONSES),
+  sequenceId: z.string().min(1).max(40).nullable().default(null),
 });
 
 export type CommandInput = z.infer<typeof commandInputSchema>;

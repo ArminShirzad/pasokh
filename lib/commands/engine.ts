@@ -87,6 +87,7 @@ export function personalize(message: OutboundMessage, username: string | null | 
 
 type RunnableCommand = {
   id: string;
+  sequenceId?: string | null;
   likeTrigger: boolean;
   responses: unknown;
   instagramAccount: {
@@ -194,6 +195,15 @@ export async function runCommand({
     await prisma.commandRun.update({ where: { id: run.id }, data: { sent: i + 1 } });
   }
   await prisma.commandRun.update({ where: { id: run.id }, data: { status: "DONE", error: null } });
+  if (command.sequenceId) {
+    // Imported here: the sequence engine reuses personalize() from this file.
+    const { startSequence } = await import("@/lib/sequences/engine");
+    // Best effort: the answer went out; a failed enrollment must not turn
+    // this run into a retry that sends it again.
+    await startSequence({ sequenceId: command.sequenceId, igsid, username }).catch((error) =>
+      console.error("[commands] could not start sequence:", error instanceof Error ? error.message : error),
+    );
+  }
   return "DONE";
 }
 

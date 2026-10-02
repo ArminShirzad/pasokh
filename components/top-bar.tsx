@@ -26,6 +26,7 @@ const pageTitles: Record<string, StaticMessageKey> = {
   "/commands": "Smart reply",
   "/showcases": "Showcase",
   "/welcome": "Welcome message",
+  "/sequences": "Smart support",
   "/simulator": "Test lab",
 };
 
@@ -34,6 +35,7 @@ const pageTitles: Record<string, StaticMessageKey> = {
 const sectionTitles: [string, StaticMessageKey][] = [
   ["/commands/", "Smart reply"],
   ["/showcases/", "Showcase"],
+  ["/sequences/", "Smart support"],
 ];
 
 interface TopBarProps {

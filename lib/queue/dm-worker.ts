@@ -13,7 +13,9 @@ import {
   MESSAGE_JOB_NAME,
   POSTBACK_JOB_NAME,
   FOLLOWUP_JOB_NAME,
+  SEQUENCE_JOB_NAME,
   type DmQueueJob,
+  type ProcessSequenceJob,
   type ProcessCommentJob,
   type ProcessMessageJob,
   type ProcessPostbackJob,
@@ -58,6 +60,7 @@ import { touchContact } from "@/lib/contacts/touch";
 import { COMMAND_PAYLOAD, activeCommandsFor, commandForCampaign, commandFromPayload, pickCommand, runCommand } from "@/lib/commands/engine";
 
 import { ZernioApiError } from "@/lib/zernio/client";
+import { runSequenceStep } from "@/lib/sequences/engine";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -309,7 +312,7 @@ async function sendRevealDirectMessage({
 }
 
 
-function connectionScope(data: DmQueueJob) {
+function connectionScope(data: { accountConnectionId?: string }) {
   return data.accountConnectionId ? { instagramAccountId: data.accountConnectionId } : {};
 }
 
@@ -1953,6 +1956,11 @@ async function dispatchJob(job: Job<DmQueueJob>): Promise<void> {
   if (job.name === MESSAGE_JOB_NAME) {
     return processMessage(job as Job<ProcessMessageJob>);
   }
+  if (job.name === SEQUENCE_JOB_NAME) {
+    const { enrollmentId, step } = job.data as ProcessSequenceJob;
+    await runSequenceStep(enrollmentId, step);
+    return;
+  }
   return processComment(job as Job<ProcessCommentJob>);
 }
 
@@ -1974,7 +1982,7 @@ async function recordWorkerFailure(
   error: Error
 ) {
   try {
-    const instagramAccountId = job?.data.instagramAccountId;
+    const instagramAccountId = job && "instagramAccountId" in job.data ? job.data.instagramAccountId : undefined;
     const commentId =
       job && "commentId" in job.data ? job.data.commentId : null;
     const account = instagramAccountId

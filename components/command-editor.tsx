@@ -30,6 +30,7 @@ export type CommandDraft = {
   onStoryMention: boolean;
   likeTrigger: boolean;
   responses: StoredResponse[];
+  sequenceId: string | null;
 };
 
 export type CommandSummary = { id: string; name: string };
@@ -37,8 +38,10 @@ export type ShowcaseSummary = { id: string; name: string; cards: Card[] };
 type Story = { id: string; media_url?: string; thumbnail_url?: string; timestamp?: string };
 type Problem = { path: string; message: string };
 
-const field =
-  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-400 focus:border-accent/40 focus:outline-none";
+// Without a width, so a small control can set its own (w-full would win over w-auto).
+const control =
+  "rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-zinc-400 focus:border-accent/40 focus:outline-none";
+const field = `w-full ${control}`;
 const smallButton = "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-hover";
 
 export default function CommandEditor({
@@ -53,6 +56,7 @@ export default function CommandEditor({
   const [draft, setDraft] = useState<CommandDraft>(initial);
   const [commands, setCommands] = useState<CommandSummary[]>([]);
   const [showcases, setShowcases] = useState<ShowcaseSummary[] | null>(null);
+  const [sequences, setSequences] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
   const [stories, setStories] = useState<Story[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -78,6 +82,11 @@ export default function CommandEditor({
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setShowcases(data.showcases ?? []);
+      });
+    void fetch(`/api/sequences?accountId=${encodeURIComponent(draft.instagramAccountId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setSequences(data.sequences ?? []);
       });
     return () => {
       cancelled = true;
@@ -300,6 +309,22 @@ export default function CommandEditor({
           )}
         </section>
 
+        <section className="space-y-2 rounded-xl border border-border bg-surface p-5">
+          <label className="block space-y-1">
+            <span className="text-sm font-medium">{t("Then start a sequence")}</span>
+            <select className={field} value={draft.sequenceId ?? ""} onChange={(e) => set("sequenceId", e.target.value || null)}>
+              <option value="">{t("No sequence")}</option>
+              {sequences.map((sq) => (
+                <option key={sq.id} value={sq.id}>{sq.isActive ? sq.name : `${sq.name} (${t("Paused")})`}</option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-muted">{t("After these replies are delivered, the person gets the sequence's follow-up messages at the times you set.")}</p>
+          {problemsAt("sequenceId").map((p, i) => (
+            <p key={i} className="text-xs text-error">{t(p.message as StaticMessageKey)}</p>
+          ))}
+        </section>
+
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -407,7 +432,7 @@ function useUpload() {
   return { uploading, uploadError, upload };
 }
 
-function ResponseEditor({
+export function ResponseEditor({
   value,
   onChange,
   onRemove,
@@ -624,7 +649,7 @@ function ButtonList({ buttons, commands, onChange }: { buttons: MessageButton[];
           <div className="flex gap-2">
             <input className={field} value={b.title} maxLength={20} placeholder={t("Button label")} onChange={(e) => update(i, { ...b, title: e.target.value })} />
             <select
-              className={`${field} w-auto`}
+              className={`${control} w-auto`}
               value={b.type}
               onChange={(e) => update(i, e.target.value === "url" ? { type: "url", title: b.title, url: "" } : { type: "postback", title: b.title, payload: "" })}
             >

@@ -29,6 +29,7 @@ vi.mock("@/lib/queue/client", () => ({
   getDMQueue: () => ({ add: async (name: string, data: Record<string, unknown>) => state.jobs.push({ name, data }) }),
   POSTBACK_JOB_NAME: "process-postback",
   MESSAGE_JOB_NAME: "process-message",
+  SEQUENCE_JOB_NAME: "process-sequence-step",
 }));
 
 import { ensureLab, runLabAction } from "../lib/simulator/lab";

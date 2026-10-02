@@ -34,6 +34,7 @@ export default function CommandEditPage({ params }: { params: Promise<{ id: stri
           onStoryMention: false,
           likeTrigger: false,
           responses: [{ type: "text", text: "" }],
+          sequenceId: null,
         });
         return;
       }

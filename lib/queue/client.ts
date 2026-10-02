@@ -83,7 +83,14 @@ export interface ProcessMessageJob {
   attachments?: Array<{ type: string; url?: string }>;
 }
 
+// One step of a sequence (smart support), delayed until it is due.
+export interface ProcessSequenceJob {
+  enrollmentId: string;
+  step: number;
+}
+
 export type DmQueueJob =
+  | ProcessSequenceJob
   | ProcessCommentJob
   | ProcessPostbackJob
   | ProcessFollowUpJob
@@ -92,6 +99,7 @@ export type DmQueueJob =
 export const POSTBACK_JOB_NAME = "process-postback";
 export const FOLLOWUP_JOB_NAME = "process-followup";
 export const MESSAGE_JOB_NAME = "process-message";
+export const SEQUENCE_JOB_NAME = "process-sequence-step";
 
 let dmQueue: Queue<DmQueueJob> | null = null;
 

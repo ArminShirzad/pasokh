@@ -20,6 +20,7 @@ const navItems = [
   { label: "Smart reply", href: "/commands" },
   { label: "Showcase", href: "/showcases" },
   { label: "Welcome message", href: "/welcome" },
+  { label: "Smart support", href: "/sequences" },
   { label: "DM Logs", href: "/logs" },
   { label: "Test lab", href: "/simulator" },
   { label: "Settings", href: "/settings" },
