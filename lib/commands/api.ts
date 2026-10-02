@@ -6,7 +6,7 @@ import { commandInputSchema, commandProblems, referencedCommandIds, type Command
 
 export function presentCommand(c: {
   id: string; name: string; instagramAccountId: string; isActive: boolean; matchMode: string; keywords: string[];
-  storyScope: string; storyIds: string[]; onStoryMention: boolean; likeTrigger: boolean; responses: unknown; sequenceId?: string | null;
+  storyScope: string; storyIds: string[]; onStoryMention: boolean; likeTrigger: boolean; responses: unknown; sequenceId?: string | null; formId?: string | null;
   createdAt: Date; updatedAt: Date; _count?: { runs: number };
 }) {
   return {
@@ -22,6 +22,7 @@ export function presentCommand(c: {
     likeTrigger: c.likeTrigger,
     responses: c.responses,
     sequenceId: c.sequenceId ?? null,
+    formId: c.formId ?? null,
     runs: c._count?.runs ?? 0,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
@@ -68,6 +69,10 @@ export async function readCommandInput(
     const found = await prisma.sequence.count({ where: { id: input.sequenceId, instagramAccountId: input.instagramAccountId } });
     if (!found) problems.push({ path: "sequenceId", message: "The chosen sequence does not exist on this Instagram account." });
   }
+  if (input.formId) {
+    const found = await prisma.form.count({ where: { id: input.formId, instagramAccountId: input.instagramAccountId } });
+    if (!found) problems.push({ path: "formId", message: "The chosen form does not exist on this Instagram account." });
+  }
   if (problems.length) return { response: NextResponse.json({ error: "Invalid command", problems }, { status: 400 }) };
   return { input };
 }
@@ -85,5 +90,6 @@ export function commandData(input: CommandInput) {
     likeTrigger: input.likeTrigger,
     responses: input.responses as Prisma.InputJsonValue,
     sequenceId: input.sequenceId,
+    formId: input.formId,
   };
 }

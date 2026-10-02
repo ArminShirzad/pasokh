@@ -61,6 +61,7 @@ import { COMMAND_PAYLOAD, activeCommandsFor, commandForCampaign, commandFromPayl
 
 import { ZernioApiError } from "@/lib/zernio/client";
 import { runSequenceStep } from "@/lib/sequences/engine";
+import { handleFormMessage } from "@/lib/forms/engine";
 
 const BACKOFF_DELAYS = [5 * 60 * 1000, 15 * 60 * 1000, 45 * 60 * 1000];
 
@@ -1584,6 +1585,20 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     username: job.data.senderUsername,
     kind: "inbound",
   });
+
+  // While a form is open their messages are its answers: «۰۹۱۲…» must be
+  // stored, not matched against keywords.
+  if (
+    await handleFormMessage({
+      instagramId: instagramAccountId,
+      igsid: senderId,
+      messageId,
+      text: messageText,
+      quickReplyPayload: job.data.quickReplyPayload,
+    })
+  ) {
+    return;
+  }
 
   // A quick reply carrying one of Pasokh's own button payloads is the same
   // action as tapping that button, so it runs the same postback path.

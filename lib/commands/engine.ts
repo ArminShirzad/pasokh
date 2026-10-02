@@ -88,6 +88,7 @@ export function personalize(message: OutboundMessage, username: string | null | 
 type RunnableCommand = {
   id: string;
   sequenceId?: string | null;
+  formId?: string | null;
   likeTrigger: boolean;
   responses: unknown;
   instagramAccount: {
@@ -202,6 +203,12 @@ export async function runCommand({
     // this run into a retry that sends it again.
     await startSequence({ sequenceId: command.sequenceId, igsid, username }).catch((error) =>
       console.error("[commands] could not start sequence:", error instanceof Error ? error.message : error),
+    );
+  }
+  if (command.formId) {
+    const { startForm } = await import("@/lib/forms/engine");
+    await startForm({ formId: command.formId, igsid, username }).catch((error) =>
+      console.error("[commands] could not start form:", error instanceof Error ? error.message : error),
     );
   }
   return "DONE";

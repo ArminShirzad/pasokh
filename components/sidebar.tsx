@@ -21,6 +21,8 @@ const navItems = [
   { label: "Showcase", href: "/showcases" },
   { label: "Welcome message", href: "/welcome" },
   { label: "Smart support", href: "/sequences" },
+  { label: "Forms", href: "/forms" },
+  { label: "Contacts", href: "/contacts" },
   { label: "DM Logs", href: "/logs" },
   { label: "Test lab", href: "/simulator" },
   { label: "Settings", href: "/settings" },

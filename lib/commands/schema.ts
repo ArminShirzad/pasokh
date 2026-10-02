@@ -39,6 +39,7 @@ export const commandInputSchema = z.object({
   likeTrigger: z.boolean().default(false),
   responses: z.array(responseSchema).min(1).max(MAX_RESPONSES),
   sequenceId: z.string().min(1).max(40).nullable().default(null),
+  formId: z.string().min(1).max(40).nullable().default(null),
 });
 
 export type CommandInput = z.infer<typeof commandInputSchema>;

@@ -92,6 +92,7 @@ model Workspace {
   commands          Command[]
   showcases         Showcase[]
   sequences         Sequence[]
+  forms             Form[]
 
   @@index([ownerId])
 }
@@ -158,6 +159,7 @@ model InstagramAccount {
   commands             Command[]
   showcases            Showcase[]
   sequences            Sequence[]
+  forms                Form[]
   iceBreakers          IceBreaker[]
   /// Last time the welcome questions were pushed to Instagram, and the
   /// error if that push failed (Instagram keeps showing the old ones then).
@@ -576,12 +578,15 @@ model Command {
   /// After its messages are delivered, the person is enrolled in this
   /// sequence (smart support: follow-ups with delays).
   sequenceId         String?
+  /// After its messages are delivered, this form starts asking its questions.
+  formId             String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
   sequence         Sequence?        @relation(fields: [sequenceId], references: [id], onDelete: SetNull)
+  form             Form?            @relation(fields: [formId], references: [id], onDelete: SetNull)
   runs             CommandRun[]
   automations      Automation[]
   iceBreakers      IceBreaker[]
@@ -688,4 +693,50 @@ model SequenceEnrollment {
 
   @@unique([sequenceId, igsid])
   @@index([status, nextAt])
+}
+
+/// A conversational form: questions asked one at a time in the DM.
+/// questions: [{ id, text, kind: text|phone|email|number|choice, choices?, saveTo?: phone|email|name }]
+model Form {
+  id                 String   @id @default(cuid())
+  workspaceId        String
+  instagramAccountId String
+  name               String
+  isActive           Boolean  @default(true)
+  questions          Json
+  /// Typing this (exactly, any case or keyboard) ends the form.
+  cancelWord         String   @default("لغو")
+  completionMessage  String
+  cancelMessage      String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+  commands         Command[]
+  submissions      FormSubmission[]
+
+  @@index([instagramAccountId])
+}
+
+/// One person filling a form. step is the question being answered; the
+/// message id of the last answer taken makes a redelivered webhook a no-op.
+model FormSubmission {
+  id            String    @id @default(cuid())
+  formId        String
+  igsid         String
+  username      String?
+  /// IN_PROGRESS | COMPLETED | CANCELLED | EXPIRED
+  status        String    @default("IN_PROGRESS")
+  step          Int       @default(0)
+  answers       Json      @default("{}")
+  lastMessageId String?
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId, status])
+  @@index([igsid, status])
 }

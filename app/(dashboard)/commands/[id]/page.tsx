@@ -35,6 +35,7 @@ export default function CommandEditPage({ params }: { params: Promise<{ id: stri
           likeTrigger: false,
           responses: [{ type: "text", text: "" }],
           sequenceId: null,
+          formId: null,
         });
         return;
       }

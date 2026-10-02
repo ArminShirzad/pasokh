@@ -31,6 +31,7 @@ export type CommandDraft = {
   likeTrigger: boolean;
   responses: StoredResponse[];
   sequenceId: string | null;
+  formId: string | null;
 };
 
 export type CommandSummary = { id: string; name: string };
@@ -57,6 +58,7 @@ export default function CommandEditor({
   const [commands, setCommands] = useState<CommandSummary[]>([]);
   const [showcases, setShowcases] = useState<ShowcaseSummary[] | null>(null);
   const [sequences, setSequences] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
+  const [forms, setForms] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
   const [stories, setStories] = useState<Story[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -87,6 +89,11 @@ export default function CommandEditor({
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setSequences(data.sequences ?? []);
+      });
+    void fetch(`/api/forms?accountId=${encodeURIComponent(draft.instagramAccountId)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) setForms(data.forms ?? []);
       });
     return () => {
       cancelled = true;
@@ -321,6 +328,19 @@ export default function CommandEditor({
           </label>
           <p className="text-xs text-muted">{t("After these replies are delivered, the person gets the sequence's follow-up messages at the times you set.")}</p>
           {problemsAt("sequenceId").map((p, i) => (
+            <p key={i} className="text-xs text-error">{t(p.message as StaticMessageKey)}</p>
+          ))}
+          <label className="block space-y-1 pt-2">
+            <span className="text-sm font-medium">{t("Then start a form")}</span>
+            <select className={field} value={draft.formId ?? ""} onChange={(e) => set("formId", e.target.value || null)}>
+              <option value="">{t("No form")}</option>
+              {forms.map((f) => (
+                <option key={f.id} value={f.id}>{f.isActive ? f.name : `${f.name} (${t("Paused")})`}</option>
+              ))}
+            </select>
+          </label>
+          <p className="text-xs text-muted">{t("Asks the form's questions one at a time in the DM; their answers go to the form's results.")}</p>
+          {problemsAt("formId").map((p, i) => (
             <p key={i} className="text-xs text-error">{t(p.message as StaticMessageKey)}</p>
           ))}
         </section>

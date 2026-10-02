@@ -157,6 +157,7 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     await state.db.command.deleteMany();
     await state.db.showcase.deleteMany();
     await state.db.sequence.deleteMany();
+    await state.db.form.deleteMany();
     await runLabAction("ws", { action: "reset" });
     accountId = (await ensureLab("ws")).account.id;
   });
@@ -353,5 +354,73 @@ describe.skipIf(!DATABASE_URL)("campaign flows through the worker on a real Post
     await drain();
     expect((await texts()).filter((t) => t?.startsWith("مرحله"))).toEqual(["مرحله ۱", "مرحله ۲"]);
     expect(await state.db.sequenceEnrollment.count({ where: { sequenceId: sequence.id } })).toBe(1);
+  });
+  async function withForm() {
+    const form = await state.db.form.create({
+      data: {
+        workspaceId: "ws",
+        instagramAccountId: accountId,
+        name: "ثبت‌نام",
+        cancelWord: "لغو",
+        completionMessage: "ممنون {username}",
+        cancelMessage: "لغو شد",
+        questions: [
+          { id: "phone", text: "شماره‌ات؟", kind: "phone", saveTo: "phone" },
+          { id: "city", text: "کدام شهر؟", kind: "choice", choices: ["تهران", "کرج"] },
+        ],
+      },
+    });
+    await state.db.command.create({
+      data: { workspaceId: "ws", instagramAccountId: accountId, name: "ثبت‌نام", keywords: ["ثبت نام"], formId: form.id, responses: [{ type: "text", text: "بیا ثبت‌نام کنیم" }] as never },
+    });
+    // Would answer «قیمت» if the form did not take the message first.
+    await state.db.command.create({
+      data: { workspaceId: "ws", instagramAccountId: accountId, name: "قیمت", keywords: ["قیمت"], responses: [{ type: "text", text: "لیست قیمت" }] as never },
+    });
+    return form;
+  }
+  const lastOut = async () => (await sent()).at(-1)?.body as { text?: string; quickReplies?: { title: string; payload: string }[] };
+
+  it("asks a form's questions in order, re-asks an answer that does not fit, and saves the phone on the contact", async () => {
+    const form = await withForm();
+    await act({ action: "dm", text: "ثبت نام" });
+    expect(await texts()).toEqual(["بیا ثبت‌نام کنیم", "شماره‌ات؟"]);
+
+    await act({ action: "dm", text: "قیمت" });
+    expect((await lastOut()).text).toMatch(/درست به نظر نمی‌رسد[\s\S]*شماره‌ات؟/);
+    expect(await texts()).not.toContain("لیست قیمت");
+
+    await act({ action: "dm", text: "۰۹۱۲ ۳۴۵ ۶۷۸۹" });
+    const ask = await lastOut();
+    expect(ask.text).toBe("کدام شهر؟");
+    await act({ action: "tap", payload: ask.quickReplies![1].payload, title: "کرج", quickReply: true });
+
+    expect((await lastOut()).text).toBe("ممنون \u2066@test.follower\u2069");
+    const submission = await state.db.formSubmission.findFirst({ where: { formId: form.id } });
+    expect(submission).toMatchObject({ status: "COMPLETED", answers: { phone: "09123456789", city: "کرج" } });
+    expect((await state.db.contact.findFirst({ where: { instagramAccountId: accountId } }))?.phone).toBe("09123456789");
+  });
+
+  it("stops the form on the cancel word and answers keywords normally afterwards", async () => {
+    const form = await withForm();
+    await act({ action: "dm", text: "ثبت نام" });
+    await act({ action: "dm", text: "لغو" });
+    expect((await lastOut()).text).toBe("لغو شد");
+    expect(await state.db.formSubmission.findFirst({ where: { formId: form.id } })).toMatchObject({ status: "CANCELLED" });
+    await act({ action: "dm", text: "قیمت" });
+    expect((await lastOut()).text).toBe("لیست قیمت");
+  });
+
+  it("takes an answer once when its webhook is delivered twice, so it does not also answer the next question", async () => {
+    const form = await withForm();
+    await act({ action: "dm", text: "ثبت نام" });
+    await runLabAction("ws", { action: "dm", text: "09123456789" });
+    const answer = state.jobs.find((j) => j.name === "process-message")!;
+    state.jobs.push({ ...answer });
+    await drain();
+    // Exactly the next question: no second copy, and no "that does not fit" re-ask
+    // from the duplicate being read as the answer to it.
+    expect(await texts()).toEqual(["بیا ثبت‌نام کنیم", "شماره‌ات؟", "کدام شهر؟"]);
+    expect(await state.db.formSubmission.findFirst({ where: { formId: form.id } })).toMatchObject({ step: 1, status: "IN_PROGRESS" });
   });
 });

@@ -20,6 +20,8 @@ const {
   mockPrisma: {
     zernioConnection: { findUnique: vi.fn() },
     postbackDelivery: { create: vi.fn(), delete: vi.fn() },
+    // No form is open: messages go on to campaigns and commands.
+    formSubmission: { findFirst: async () => null },
     automation: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
