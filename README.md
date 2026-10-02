@@ -41,6 +41,12 @@ password.
 - **Smart support**: follow-up messages minutes, hours or days after a smart
   reply, stopping when the person answers; the builder warns about any step
   Instagram's 24-hour window would refuse.
+- **Form builder**: questions asked one at a time in the DM (text, phone,
+  email, number, choice buttons) with a cancel word; phone numbers in Persian
+  or English digits; results with a one-row-per-person filter and CSV that
+  Excel opens with Persian intact.
+- **Contacts**: everyone who messaged or commented, with phone, email and
+  tags; search, filter and CSV export.
 - **Test lab**: try every flow with a pretend follower, no Instagram needed;
   it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
@@ -49,8 +55,7 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): a conversational form
-builder; AI replies; SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): AI replies; SMS.
 
 ## Install
 

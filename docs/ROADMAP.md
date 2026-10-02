@@ -216,6 +216,19 @@ Each phase lists what "done" means.
 ### P6 Form builder and contacts
 - Conversational forms on `ConversationSession`; results table, duplicate
   filter, CSV / Excel export; contacts page with tags and phone numbers.
+- Status 2026-10-02: built, on its own FormSubmission table rather than
+  ConversationSession (a form needs its answers and step). A smart reply
+  starts a form after its messages; one form at a time per person; an open
+  form takes their DMs before keywords, so «قیمت» typed as an answer is an
+  answer. Phone (Iranian forms → 09…, Persian digits), email, number and
+  choice (button, text on any keyboard, or its number) are checked and asked
+  again with a hint; the cancel word stops it; 24 hours unanswered expires it.
+  Each answer is claimed by message id, so a redelivered webhook is taken
+  once. Phone and email can be saved on the contact. Results: one row per
+  person filter, CSV with a UTF-8 byte-order mark (Excel shows Persian) and
+  formula-like cells neutralised; no .xlsx (a CSV opens in Excel). Contacts:
+  search (Persian digits too), tags, phone, email, edit, CSV export. Run
+  end to end in the test lab through the real worker.
 
 ### P7 AI replies
 - Persona, tone, knowledge base; for comments and DMs. Providers: Anthropic
