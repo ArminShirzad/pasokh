@@ -250,6 +250,18 @@ Each phase lists what "done" means.
 ### P8 SMS
 - Provider interface; Kavenegar, sms.ir, Melipayamak; bulk send to contacts;
   phone capture via forms.
+- Status 2026-10-03: built. One panel per workspace (key encrypted, never
+  returned) or a test mode that sends nothing. A send fixes its recipients
+  at creation (contacts with a phone, optionally one account or tag), one
+  row per distinct number. Batches of 100 go through the worker; each run
+  claims rows under its own claim id, so overlapping runs split the rows
+  (measured with the old read-then-claim code: 150 numbers, three
+  overlapping runs, 200 SMS sent; with the claim id, 150). A refusal about
+  the account (credit, key, line) stops the send; an unclear outcome
+  (network, 5xx, unreadable answer) marks that batch UNCONFIRMED and stops,
+  never resending. Request formats follow each provider's docs (Kavenegar
+  REST page, sms.ir v1, Melipayamak console as used by its Node library),
+  read 2026-10-03; no real panel tested. Phone capture via forms is P6.
 
 ### P9 Polish
 - Reports, ideas / templates gallery, docs site, demo video.

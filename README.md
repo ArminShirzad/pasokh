@@ -51,6 +51,9 @@ password.
   tone and knowledge base, with Claude or any OpenAI-compatible API
   (including Iranian gateways); told not to invent prices or facts, with a
   daily cap per person. You bring the API key; it is stored encrypted.
+- **SMS**: bulk SMS to contacts' phone numbers (all, or by tag) through your
+  own Kavenegar, sms.ir or Melipayamak panel, with a Persian-aware length
+  counter, a test mode that sends nothing, and per-number delivery records.
 - **Test lab**: try every flow with a pretend follower, no Instagram needed;
   it refuses what Instagram refuses.
 - **Tracked links** with click counts per campaign, up to three per DM.
@@ -59,7 +62,8 @@ password.
 - **Team**: several Instagram accounts, workspace members and roles.
 - **Persian interface** with a Jalali calendar, or English; each person picks.
 
-Coming next (see the [roadmap](docs/ROADMAP.md)): SMS.
+Coming next (see the [roadmap](docs/ROADMAP.md)): reports, a templates
+gallery, a docs site.
 
 ## Install
 
