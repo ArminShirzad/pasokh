@@ -14,8 +14,18 @@ export function requireEnv(name: string): string {
   return readEnv(name);
 }
 
+/**
+ * The address Instagram, Zernio and link clicks reach this server at.
+ *
+ * PASOKH_PUBLIC_URL is set by the container entrypoint for a quick tunnel,
+ * whose address is only known at start-up. It is kept apart from NEXTAUTH_URL
+ * on purpose: when NEXTAUTH_URL is set, Auth.js sends every sign-in redirect
+ * there, so someone signing in at http://localhost:3000 was bounced to the
+ * tunnel host, where their localhost cookie does not exist, and looked signed
+ * out. Without it Auth.js follows the host the person is actually using.
+ */
 export function getBaseUrl(): string {
-  return process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  return process.env.PASOKH_PUBLIC_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 }
 
 export function getEncryptionKeyHex(): string {

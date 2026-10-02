@@ -76,7 +76,9 @@ describe("password hashing", () => {
   });
 });
 
-describe("credential checks", () => {
+// Each check runs real scrypt (~30 ms+); the throttling cases do 20+ of them,
+// which overran the 5 s default under a full parallel run.
+describe("credential checks", { timeout: 30_000 }, () => {
   beforeEach(async () => {
     redis.store.clear();
     db.users.clear();

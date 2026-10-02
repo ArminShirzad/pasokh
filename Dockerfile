@@ -1,42 +1,43 @@
-# OpenReply — self-hosted Docker image
+# Pasokh — one image, four roles (see docker-compose.yml):
+#   web     `npm run start`      next start
+#   worker  `npm run worker`     tsx worker/dm-worker.ts (raw TypeScript: needs the
+#                                source tree, tsconfig.json for the @/ alias and
+#                                the generated Prisma client)
+#   cron    `sh scripts/cron.sh` calls /api/cron on a schedule (needs wget)
+#   migrate `npx prisma migrate deploy`
 #
-# Two runtime processes ship from this image:
-#   - web:    `npm run start`  → next start (needs .next + node_modules)
-#   - worker: `npm run worker` → tsx worker/dm-worker.ts (runs RAW TypeScript,
-#             not a bundled output — needs the generated Prisma client, the
-#             full source tree under lib/ and worker/, and tsconfig.json for
-#             the `@/*` path alias tsx resolves at runtime)
-#   - cron:   `sh scripts/cron.sh` → the scheduler for /api/cron, which nothing
-#             runs off Vercel (see docs/deploy-dokploy.md). It needs scripts/
-#             in the image and wget on PATH; node:20-slim ships neither.
+# next.config.ts has no `output: "standalone"`, so `next start` needs the full
+# node_modules anyway; the runner keeps it rather than trying to slim it, which
+# is what breaks the worker (MODULE_NOT_FOUND on @/lib imports).
 #
-# next.config.ts does not set `output: "standalone"`, so `next start` already
-# requires the full node_modules tree at runtime — there is no slimmer
-# standalone bundle to fall back to here. Given that, this Dockerfile does
-# NOT try to strip node_modules/tsconfig.json/source files out of the final
-# stage: doing so is exactly what breaks the worker (MODULE_NOT_FOUND on
-# `@/lib/...` imports, because tsx has no tsconfig to resolve the alias
-# against, and no app/generated/prisma to import from).
+# Node 24: Node 20 reached end of life in April 2026.
 
-FROM node:20-slim AS build
+FROM node:24-slim AS build
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+# Prisma detects the OpenSSL version to pick its schema engine; without it, it
+# guesses openssl-1.1.x, which this Debian release does not ship.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-# `npm run build` = `prisma generate && next build` (see package.json) —
-# generates app/generated/prisma AND compiles .next/ in one step.
+# `npm run build` = `prisma generate && next build`.
 RUN npm run build
 
-FROM node:20-slim AS runner
+FROM node:24-slim AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
 
-# scripts/cron.sh calls the /api/cron routes with wget, which node:20-slim does
-# not include.
+# wget: cron.sh and the quick-tunnel lookup in the entrypoint. tzdata: dates in
+# the owner's timezone (TZ, e.g. Asia/Tehran) instead of UTC. openssl: the
+# Prisma schema engine that `migrate deploy` runs.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends wget ca-certificates \
+ && apt-get install -y --no-install-recommends wget ca-certificates tzdata openssl \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/node_modules ./node_modules
@@ -52,8 +53,9 @@ COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 
+RUN chmod +x scripts/docker-entrypoint.sh scripts/cron.sh
+
 EXPOSE 3000
-# Default to the web process — the worker service overrides this with
-# `command: ["npm", "run", "worker"]` in whatever compose/stack file deploys
-# it (see openreply-vps.stack.yml in EvolutionAPI/omni-nexus for an example).
+# Resolves the public URL (quick tunnel) before starting the role's command.
+ENTRYPOINT ["scripts/docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]

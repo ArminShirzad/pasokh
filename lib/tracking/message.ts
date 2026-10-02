@@ -56,7 +56,7 @@ export function buildTrackedUrl(slug: string, baseUrl?: string) {
     baseUrl ??
     (typeof window !== "undefined"
       ? window.location.origin
-      : process.env.NEXTAUTH_URL ?? "http://localhost:3000");
+      : process.env.PASOKH_PUBLIC_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000");
 
   return `${resolvedBaseUrl.replace(/\/$/, "")}/r/${slug}`;
 }

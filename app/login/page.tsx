@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import AuthCard, { Field, FormError, SubmitButton } from "@/components/auth-card";
-import { EMAIL_PROVIDER_ID, PASSWORD_PROVIDER_ID, isEmailLoginEnabled, signIn } from "@/lib/auth";
+import { EMAIL_PROVIDER_ID, PASSWORD_PROVIDER_ID, auth, isEmailLoginEnabled, signIn } from "@/lib/auth";
 import { getI18n } from "@/lib/i18n/server";
 import { getCampaignTemplate } from "@/lib/templates/campaign-templates";
 import { needsFirstRunSetup } from "@/lib/users/accounts";
@@ -38,6 +38,11 @@ export default async function LoginPage({
   const templateCallbackUrl = selectedTemplate ? `/campaigns/new?template=${selectedTemplate.slug}` : null;
   const callbackUrl = safeCallbackUrl(params.callbackUrl) ?? templateCallbackUrl ?? "/dashboard";
   const emailLogin = isEmailLoginEnabled();
+
+  // Already signed in with a session the server can read: go on. (An
+  // unreadable cookie yields no session here, so the form shows instead of a
+  // redirect loop.)
+  if ((await auth())?.user?.id) redirect(callbackUrl);
 
   const errorMessage =
     params.code === "throttled"

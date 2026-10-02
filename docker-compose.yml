@@ -1,0 +1,128 @@
+# Pasokh (پاسخ) — everything in one compose file.
+#
+# The installer (install.sh / install.ps1) writes .env and runs this for you:
+#   docker compose up -d
+#
+# How the outside world reaches the server is chosen in .env with
+# COMPOSE_PROFILES (the installer sets it):
+#   quick       Cloudflare quick tunnel. No domain needed; the URL changes when
+#               the tunnel restarts, and Pasokh follows it automatically.
+#   domain      Your own domain with automatic HTTPS (Caddy). Needs ports 80
+#               and 443 open and a DNS A record pointing at this server.
+#   cloudflare  Cloudflare named tunnel (stable URL, no open ports).
+#   (none)      Local only: http://localhost:3000. Instagram cannot reach it.
+#
+# Update:  docker compose pull && docker compose up -d
+
+name: pasokh
+
+x-app: &app
+  image: ${PASOKH_IMAGE:-ghcr.io/arminshirzad/pasokh:latest}
+  # Used only when the image cannot be pulled and you run from a source
+  # checkout (`docker compose build`).
+  build:
+    context: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://pasokh:${POSTGRES_PASSWORD:?run the installer or set POSTGRES_PASSWORD in .env}@postgres:5432/pasokh
+    REDIS_URL: redis://redis:6379
+    TZ: ${TZ:-Asia/Tehran}
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pasokh
+      POSTGRES_USER: pasokh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pasokh -d pasokh"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Append-only: queued DMs and rate-limit counters survive a restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # One-shot: applies database migrations, then exits. web and worker wait for it.
+  migrate:
+    <<: *app
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    <<: *app
+    command: ["npm", "run", "start"]
+    ports:
+      - "${PASOKH_BIND:-127.0.0.1}:${PASOKH_PORT:-3000}:3000"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  # Sends the DMs. Without it, comments are received but nobody answers them.
+  worker:
+    <<: *app
+    command: ["npm", "run", "worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  # Token refresh, follower snapshots, next-reel binding.
+  cron:
+    <<: *app
+    command: ["sh", "scripts/cron.sh"]
+    depends_on:
+      - web
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # The metrics port serves /quicktunnel, which the app reads its URL from.
+    command: tunnel --no-autoupdate --metrics 0.0.0.0:2000 --url http://web:3000
+    profiles: ["quick"]
+    restart: unless-stopped
+
+  cloudflared-named:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    profiles: ["cloudflare"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PASOKH_DOMAIN: ${PASOKH_DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    profiles: ["domain"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  caddydata:
+  caddyconfig:

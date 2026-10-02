@@ -1,0 +1,7 @@
+# Used by the "domain" profile. Caddy gets and renews the HTTPS certificate for
+# PASOKH_DOMAIN automatically; the domain's DNS A record must point at this
+# server and ports 80 and 443 must be open.
+{$PASOKH_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}

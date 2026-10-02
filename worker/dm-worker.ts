@@ -3,6 +3,8 @@ import { recordWorkerHeartbeat } from "@/lib/ops/worker-health";
 import { reconcileComments } from "@/lib/polling/comment-reconciler";
 import { attachPendingNextReels } from "@/lib/automation/attach-next-reel";
 import os from "node:os";
+import { getBaseUrl } from "@/lib/env";
+import { syncZernioWebhooks } from "@/lib/zernio/sync-webhooks";
 
 const worker = createDMWorker();
 const startedAt = new Date().toISOString();
@@ -43,6 +45,16 @@ async function poll() {
     console.error("[DM Worker] Comment reconciliation failed:", message);
   }
 }
+
+// The public URL may have changed since the last start (a quick tunnel gets a
+// new one every time); make sure Zernio delivers to the current one.
+void syncZernioWebhooks(getBaseUrl())
+  .then((result) => {
+    if (result.updated || result.failed) console.log("[DM Worker] Zernio webhook sync:", result);
+  })
+  .catch((error) => {
+    console.error("[DM Worker] Zernio webhook sync failed:", error instanceof Error ? error.message : error);
+  });
 
 // Kick off one sweep shortly after boot, then on a fixed interval.
 setTimeout(() => void poll(), 10_000);

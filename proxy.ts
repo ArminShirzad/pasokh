@@ -11,33 +11,27 @@ function hasSessionCookie(request: NextRequest): boolean {
   );
 }
 
+// The proxy only sees whether a session cookie exists, not whether it is
+// valid. That is enough to send a signed-out visitor to /login early, but it
+// must never send /login onwards to the dashboard: a cookie the server cannot
+// decrypt (a reinstall with a new NEXTAUTH_SECRET, a restored backup, another
+// app on localhost) made /login redirect to /dashboard and the dashboard back
+// to /login, forever. The login page checks the session itself instead.
 export function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
-  const isLogin = pathname === "/login";
-  const isAuthenticated = hasSessionCookie(request);
 
-  if (isProtected && !isAuthenticated) {
+  if (isProtected && !hasSessionCookie(request)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (isLogin && isAuthenticated) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/automations/:path*",
-    "/logs/:path*",
-    "/settings/:path*",
-    "/login",
-  ],
+  matcher: ["/dashboard/:path*", "/automations/:path*", "/logs/:path*", "/settings/:path*"],
 };
