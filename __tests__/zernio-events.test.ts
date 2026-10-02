@@ -37,6 +37,16 @@ describe('Zernio event boundary', () => {
     const read = normalizeZernioEvent({ account, payload: { ...envelope, event: 'message.read', conversation: { participantId: 'person1' }, statusAt: '2026-09-08T00:00:00Z' } });
     expect(parseReadEvents(read!)[0]).toEqual({ instagramAccountId: 'ig1', userId: 'person1', watermark: 1788825600000 });
   });
+  it('maps quick-reply taps, story replies and the sender username into the Meta shape', () => {
+    const tap = normalizeZernioEvent({ account, payload: { ...envelope, event: 'message.received', message: { platformMessageId: 'm1', direction: 'incoming', text: 'تهران', sender: { id: 'person1', username: 'fan' }, attachments: [] }, metadata: { quickReplyPayload: 'cmd:tehran' } } });
+    expect(parseMessageEvents(tap!)[0]).toEqual({ instagramAccountId: 'ig1', messageId: 'm1', messageText: 'تهران', senderId: 'person1', senderUsername: 'fan', quickReplyPayload: 'cmd:tehran' });
+    const story = normalizeZernioEvent({ account, payload: { ...envelope, event: 'message.received', message: { platformMessageId: 'm2', direction: 'incoming', text: 'price?', sender: { id: 'person1' }, attachments: [] }, metadata: { storyReply: { storyId: 'st1', storyUrl: 'https://cdn.example/st1' } } } });
+    expect(parseMessageEvents(story!)[0]).toMatchObject({ messageText: 'price?', storyId: 'st1' });
+  });
+  it('recognises a story mention that Zernio reports as a "share" attachment', () => {
+    const mention = normalizeZernioEvent({ account, payload: { ...envelope, event: 'message.received', message: { platformMessageId: 'm3', direction: 'incoming', text: null, sender: { id: 'person1' }, attachments: [{ type: 'share', originalType: 'story_mention', url: 'https://cdn.example/m' }] }, metadata: null } });
+    expect(parseMessageEvents(mention!)[0]).toMatchObject({ messageText: '', isStoryMention: true, attachments: [{ type: 'story_mention', url: 'https://cdn.example/m' }] });
+  });
   it('rejects malformed and unrelated events', () => {
     for (const payload of [null, {}, { ...envelope, event: 'post.published' }, { ...envelope, event: 'message.received', message: {} }]) {
       expect(normalizeZernioEvent({ payload, account })).toBeNull();

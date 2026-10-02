@@ -43,6 +43,9 @@ const {
       updateMany: vi.fn(),
       upsert: vi.fn(),
     },
+    contact: {
+      upsert: vi.fn(),
+    },
   },
   mockSendPrivateReply: vi.fn(),
   mockSendPrivateReplyWithLinkButton: vi.fn(),
@@ -251,6 +254,7 @@ beforeEach(() => {
   mockPrisma.conversationSession.findFirst.mockReset().mockResolvedValue(null);
   mockPrisma.conversationSession.updateMany.mockReset().mockResolvedValue({ count: 1 });
   mockPrisma.conversationSession.upsert.mockReset().mockResolvedValue({});
+  mockPrisma.contact.upsert.mockReset().mockResolvedValue({});
   mockDecryptToken.mockReturnValue("decrypted_token");
   mockMatchKeywords.mockReturnValue({ matched: true, matchedKeyword: "LINK" });
   mockReserveWorkspaceDMSend.mockResolvedValue({
@@ -1962,5 +1966,63 @@ describe("DM Worker — answering a text-first comment reply", () => {
     await getProcessor()(answerJob("LINK"));
 
     expect(mockPrisma.automation.findMany).toHaveBeenCalled();
+  });
+});
+
+describe("DM Worker — richer inbound messages", () => {
+  function messageJob(data: Record<string, unknown>) {
+    return {
+      name: "process-message",
+      data: {
+        instagramAccountId: "ig_456",
+        accountConnectionId: "ig_account_row_1",
+        messageId: "mid_rich",
+        messageText: "",
+        senderId: "commenter_999",
+        ...data,
+      },
+      id: "message_job_rich",
+      attemptsMade: 0,
+    };
+  }
+
+  it("does not let a sticker or story mention fire keyword campaigns, even an any-word one", async () => {
+    mockPrisma.automation.findMany.mockResolvedValue([{ ...mockAutomation, dmTriggerEnabled: true, matchAnyWord: true }]);
+
+    await getProcessor()(messageJob({ isStoryMention: true, attachments: [{ type: "story_mention" }] }));
+
+    expect(mockPrisma.automation.findMany).not.toHaveBeenCalled();
+    expect(mockSendDirectMessage).not.toHaveBeenCalled();
+  });
+
+  it("runs a quick reply carrying a Pasokh button payload as that button's tap", async () => {
+    await getProcessor()(messageJob({ messageText: "Get the link", quickReplyPayload: "reveal:auto_789" }));
+
+    expect(mockQueueAdd).toHaveBeenCalledWith(
+      "process-postback",
+      expect.objectContaining({ userId: "commenter_999", payload: "reveal:auto_789", mid: "mid_rich" }),
+      expect.objectContaining({ jobId: expect.stringMatching(/^quickreply_ig_456_/) })
+    );
+    expect(mockPrisma.automation.findMany).not.toHaveBeenCalled();
+  });
+
+  it("records the sender as a contact whose 24-hour window just opened", async () => {
+    await getProcessor()(messageJob({ messageText: "hi", senderUsername: "fan.account" }));
+
+    expect(mockPrisma.contact.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { instagramAccountId_igsid: { instagramAccountId: "ig_account_row_1", igsid: "commenter_999" } },
+        update: expect.objectContaining({ username: "fan.account", lastInboundAt: expect.any(Date) }),
+      })
+    );
+  });
+
+  it("still replies when recording the contact fails", async () => {
+    mockPrisma.contact.upsert.mockRejectedValue(new Error("db hiccup"));
+    mockPrisma.automation.findMany.mockResolvedValue([{ ...mockAutomation, dmTriggerEnabled: true }]);
+
+    await getProcessor()(messageJob({ messageText: "can I get the LINK?" }));
+
+    expect(mockSendDirectMessage).toHaveBeenCalled();
   });
 });

@@ -53,6 +53,7 @@ import {
 import { TRACKED_LINK_ORDER } from "@/lib/tracking/link-order";
 import { defaultFollowButtonLabel, defaultFollowPrompt } from "@/lib/automation/default-copy";
 import { claimCommentAnswer, expectCommentAnswer, releaseCommentAnswer, withContinuePrompt } from "@/lib/conversations/sessions";
+import { touchContact } from "@/lib/contacts/touch";
 
 import { ZernioApiError } from "@/lib/zernio/client";
 
@@ -303,6 +304,16 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     originalMediaId,
   } = job.data;
   const requeueAttempt = job.data.requeueAttempt ?? 0;
+
+  if (requeueAttempt === 0) {
+    await touchContact({
+      instagramId: instagramAccountId,
+      accountConnectionId: job.data.accountConnectionId,
+      igsid: commenterId,
+      username: commenterName,
+      kind: "comment",
+    });
+  }
 
   const automations = await prisma.automation.findMany({
     where: {
@@ -956,6 +967,17 @@ async function sendFollowRecheckAck({
 async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
   const { instagramAccountId, userId, payload, fallback } = job.data;
 
+  // A tap is a message from them and opens the 24-hour window; a read
+  // fallback is not.
+  if (!fallback) {
+    await touchContact({
+      instagramId: instagramAccountId,
+      accountConnectionId: job.data.accountConnectionId,
+      igsid: userId,
+      kind: "inbound",
+    });
+  }
+
   const isFollowCheck = payload.startsWith("followcheck:");
   if (!isFollowCheck && !payload.startsWith("reveal:")) return;
   // The opening DM's button appends ":open" to the payload; the follow
@@ -1346,6 +1368,32 @@ async function processFollowUp(job: Job<ProcessFollowUpJob>): Promise<void> {
 async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
   const { instagramAccountId, messageId, messageText, senderId } = job.data;
 
+  await touchContact({
+    instagramId: instagramAccountId,
+    accountConnectionId: job.data.accountConnectionId,
+    igsid: senderId,
+    username: job.data.senderUsername,
+    kind: "inbound",
+  });
+
+  // A quick reply carrying one of Pasokh's own button payloads is the same
+  // action as tapping that button, so it runs the same postback path.
+  const quickReply = job.data.quickReplyPayload;
+  if (quickReply && /^(reveal|followcheck):/.test(quickReply)) {
+    await getDMQueue().add(
+      POSTBACK_JOB_NAME,
+      {
+        instagramAccountId,
+        accountConnectionId: job.data.accountConnectionId,
+        userId: senderId,
+        payload: quickReply,
+        mid: messageId,
+      },
+      { jobId: `quickreply_${instagramAccountId}_${Buffer.from(messageId).toString("base64url")}` }
+    );
+    return;
+  }
+
   // The answer to a text-first comment reply: continue that campaign exactly
   // as if they had tapped its button, and do not also treat the answer as a
   // new keyword message ("ok" should not trigger some other campaign).
@@ -1379,6 +1427,12 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     }
     return;
   }
+
+  // A sticker, shared post or story mention has no words to match. Keyword
+  // campaigns (including "any word") stay text-only until story and mention
+  // triggers get their own settings (P2), so that turning this parsing on
+  // does not suddenly answer every sticker.
+  if (!messageText.trim()) return;
 
   const automations = await prisma.automation.findMany({
     where: {

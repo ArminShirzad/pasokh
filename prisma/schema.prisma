@@ -148,6 +148,7 @@ model InstagramAccount {
   linkClicks  LinkClick[]
   followerSnapshots FollowerSnapshot[]
   conversationSessions ConversationSession[]
+  contacts          Contact[]
 
   @@index([workspaceId])
 }
@@ -444,4 +445,32 @@ model ConversationSession {
 
   @@unique([instagramAccountId, contactId, kind, automationId])
   @@index([instagramAccountId, contactId, consumedAt])
+}
+
+/// One person who has commented on or messaged a connected account. Forms,
+/// SMS and segments (P6, P8) build on it; lastInboundAt is what decides
+/// whether Instagram's 24-hour messaging window is still open.
+model Contact {
+  id                 String    @id @default(cuid())
+  /// InstagramAccount.id: the connection, not the Instagram user id.
+  instagramAccountId String
+  /// The person's Instagram-scoped id (IGSID).
+  igsid              String
+  username           String?
+  name               String?
+  phone              String?
+  email              String?
+  tags               String[]  @default([])
+  firstSeenAt        DateTime  @default(now())
+  /// Their last DM, quick-reply or button tap. Messages to them are accepted
+  /// for 24 hours after it.
+  lastInboundAt      DateTime?
+  lastCommentAt      DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  instagramAccount InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([instagramAccountId, igsid])
+  @@index([instagramAccountId, lastInboundAt])
 }

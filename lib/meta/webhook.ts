@@ -72,7 +72,9 @@ interface WebhookEntry {
     };
   }>;
   messaging?: Array<{
-    sender?: { id?: string };
+    // username is not part of Meta's payload; Zernio events normalised into
+    // this shape carry it (lib/zernio/normalize-event.ts).
+    sender?: { id?: string; username?: string };
     recipient?: { id?: string };
     postback?: { mid?: string; title?: string; payload?: string };
     read?: { watermark?: number; seq?: number };
@@ -82,7 +84,11 @@ interface WebhookEntry {
       is_echo?: boolean;
       is_deleted?: boolean;
       is_unsupported?: boolean;
-      attachments?: Array<{ type?: string }>;
+      attachments?: Array<{ type?: string; payload?: { url?: string } }>;
+      // A tap on a quick reply: `text` is its label, `payload` is ours.
+      quick_reply?: { payload?: string };
+      // A reply to one of the account's stories.
+      reply_to?: { mid?: string; story?: { id?: string; url?: string } };
     };
   }>;
 }
@@ -90,8 +96,15 @@ interface WebhookEntry {
 export interface WebhookMessageEvent {
   instagramAccountId: string;
   messageId: string;
+  /** Trimmed; empty for a message that is only an attachment or mention. */
   messageText: string;
   senderId: string;
+  senderUsername?: string;
+  quickReplyPayload?: string;
+  storyId?: string;
+  /** They mentioned the account in their own story. */
+  isStoryMention?: boolean;
+  attachments?: Array<{ type: string; url?: string }>;
 }
 
 export interface WebhookPostbackEvent {
@@ -195,14 +208,14 @@ export function parsePostbackEvents(
 }
 
 /**
- * Parse inbound Instagram DMs out of a webhook payload. These drive the
- * keyword-triggered autoreply: a user messages the account, and a campaign
- * with `dmTriggerEnabled` whose keywords match the text replies to them.
+ * Parse inbound Instagram DMs out of a webhook payload: text, quick-reply
+ * taps, story replies, story mentions and attachments.
  *
- * Echoes (messages the account itself sent, including our own autoreplies),
- * deletions, and attachment-only messages with no text are dropped here so
- * the worker never sees them — an echo would otherwise let an autoreply
- * containing its own keyword trigger itself.
+ * Echoes (messages the account itself sent, including our own autoreplies)
+ * and deletions are dropped here so the worker never sees them — an echo would
+ * otherwise let an autoreply containing its own keyword trigger itself. A
+ * message with no text is kept only when it carries something to act on
+ * (OpenReply dropped all of them, which also dropped story mentions).
  */
 export function parseMessageEvents(
   payload: WebhookPayload
@@ -219,12 +232,19 @@ export function parseMessageEvents(
         continue;
       }
 
-      const text = message.text?.trim();
+      const text = message.text?.trim() ?? "";
       const messageId = message.mid;
       const senderId = messaging.sender?.id;
       const accountId = entry.id ?? messaging.recipient?.id;
+      const attachments = (message.attachments ?? [])
+        .filter((a): a is { type: string; payload?: { url?: string } } => typeof a.type === "string")
+        .map((a) => ({ type: a.type, ...(a.payload?.url ? { url: a.payload.url } : {}) }));
+      const quickReplyPayload = message.quick_reply?.payload || undefined;
+      const storyId = message.reply_to?.story?.id || undefined;
+      const isStoryMention = attachments.some((a) => a.type === "story_mention");
 
-      if (!text || !messageId || !senderId || !accountId) continue;
+      if (!messageId || !senderId || !accountId) continue;
+      if (!text && !quickReplyPayload && !storyId && attachments.length === 0) continue;
       // Ignore anything the connected account sent to itself.
       if (senderId === accountId) continue;
 
@@ -233,6 +253,11 @@ export function parseMessageEvents(
         messageId,
         messageText: text,
         senderId,
+        ...(messaging.sender?.username ? { senderUsername: messaging.sender.username } : {}),
+        ...(quickReplyPayload ? { quickReplyPayload } : {}),
+        ...(storyId ? { storyId } : {}),
+        ...(isStoryMention ? { isStoryMention } : {}),
+        ...(attachments.length ? { attachments } : {}),
       });
     }
   }

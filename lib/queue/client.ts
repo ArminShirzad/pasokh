@@ -75,6 +75,11 @@ export interface ProcessMessageJob {
   messageId: string;
   messageText: string;
   senderId: string;
+  senderUsername?: string;
+  quickReplyPayload?: string;
+  storyId?: string;
+  isStoryMention?: boolean;
+  attachments?: Array<{ type: string; url?: string }>;
 }
 
 export type DmQueueJob =

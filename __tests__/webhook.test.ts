@@ -409,15 +409,50 @@ describe("parseMessageEvents", () => {
     ).toHaveLength(0);
   });
 
-  it("should ignore attachment-only messages with no text", () => {
+  it("keeps an attachment-only message, with empty text, so story mentions are not lost", () => {
     const payload = messagingPayload([
       {
         sender: { id: "user_999" },
         recipient: { id: "ig_456" },
-        message: { mid: "mid_abc", attachments: [{ type: "image" }] },
+        message: { mid: "mid_abc", attachments: [{ type: "story_mention", payload: { url: "https://cdn.example/s.jpg" } }] },
       },
     ]);
 
+    expect(parseMessageEvents(payload)).toEqual([
+      {
+        instagramAccountId: "ig_456",
+        messageId: "mid_abc",
+        messageText: "",
+        senderId: "user_999",
+        isStoryMention: true,
+        attachments: [{ type: "story_mention", url: "https://cdn.example/s.jpg" }],
+      },
+    ]);
+  });
+
+  it("carries a quick-reply tap's payload and a story reply's story id", () => {
+    const payload = messagingPayload([
+      {
+        sender: { id: "user_999" },
+        recipient: { id: "ig_456" },
+        message: { mid: "mid_qr", text: "تهران", quick_reply: { payload: "cmd:tehran" } },
+      },
+      {
+        sender: { id: "user_999" },
+        recipient: { id: "ig_456" },
+        message: { mid: "mid_story", text: "price?", reply_to: { story: { id: "story_42", url: "https://cdn.example/x" } } },
+      },
+    ]);
+
+    const [tap, storyReply] = parseMessageEvents(payload);
+    expect(tap).toMatchObject({ messageText: "تهران", quickReplyPayload: "cmd:tehran" });
+    expect(storyReply).toMatchObject({ messageText: "price?", storyId: "story_42" });
+  });
+
+  it("still drops a message with nothing in it", () => {
+    const payload = messagingPayload([
+      { sender: { id: "user_999" }, recipient: { id: "ig_456" }, message: { mid: "mid_empty", text: "  " } },
+    ]);
     expect(parseMessageEvents(payload)).toHaveLength(0);
   });
 
