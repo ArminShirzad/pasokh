@@ -9,9 +9,11 @@
  * reply, the 24-hour window), so what works here works on Instagram.
  */
 
+import { handle } from "@/lib/text/handle";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n/provider";
-import type { OutboundMessage, MessageButton } from "@/lib/messages/outbound";
+import type { OutboundMessage } from "@/lib/messages/outbound";
+import MessagePreview from "@/components/message-preview";
 
 type LabEvent = {
   id: string;
@@ -96,7 +98,7 @@ export default function SimulatorPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">{t("Test lab")}</h1>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">
-          {t("Try your campaigns without Instagram. Create a campaign for the account @{username}, then comment or send a DM here as a test follower. Nothing is sent to Instagram.", { username: state.account.username })}
+          {t("Try your campaigns without Instagram. Create a campaign for the account {username}, then comment or send a DM here as a test follower. Nothing is sent to Instagram.", { username: handle(state.account.username) })}
         </p>
         {error && <p className="mt-2 text-sm text-error">{error}</p>}
       </div>
@@ -113,7 +115,7 @@ export default function SimulatorPage() {
                   {thread.map((e) => (
                     <p key={e.id} className={`text-sm ${e.kind === "comment_reply" ? "ms-6 text-accent" : "text-foreground"}`}>
                       <span className="font-semibold">
-                        {e.kind === "comment_reply" ? `@${state.account.username}` : `@${state.fan.username}`}
+                        {e.kind === "comment_reply" ? `${handle(state.account.username)}` : `${handle(state.fan.username)}`}
                       </span>{" "}
                       {String(e.body.text ?? "")}
                     </p>
@@ -147,8 +149,8 @@ export default function SimulatorPage() {
         <section className="flex min-h-[32rem] flex-col rounded-2xl border border-border bg-background">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-foreground">@{state.account.username}</p>
-              <p className="text-xs text-muted">{t("As seen by @{username}", { username: state.fan.username })}</p>
+              <p className="text-sm font-semibold text-foreground">{handle(state.account.username)}</p>
+              <p className="text-xs text-muted">{t("As seen by {username}", { username: handle(state.fan.username) })}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-xs text-foreground">
@@ -257,7 +259,7 @@ function ChatLine({
   if (event.kind === "tap") content = String(body.title ?? "");
   else if (event.kind === "story_mention") content = <em>{t("Mentioned you in their story")}</em>;
   else if (event.kind === "story_reply") content = <><em className="block text-xs opacity-75">{t("Replied to your story")}</em>{String(body.text ?? "")}</>;
-  else content = <OutboundContent message={body as unknown as OutboundMessage} interactive={interactive} onTap={onTap} />;
+  else content = <MessagePreview message={body as unknown as OutboundMessage} interactive={interactive} onTap={onTap} />;
 
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
@@ -271,69 +273,6 @@ function ChatLine({
           {content}
         </div>
       </div>
-    </div>
-  );
-}
-
-function OutboundContent({
-  message,
-  interactive,
-  onTap,
-}: {
-  message: OutboundMessage;
-  interactive: boolean;
-  onTap: (payload: string, title: string, quickReply: boolean) => void;
-}) {
-  const { t } = useI18n();
-  const button = (b: MessageButton, i: number) =>
-    b.type === "url" ? (
-      <a key={i} href={b.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-border bg-background px-3 py-2 text-center text-xs font-semibold text-accent">
-        {b.title} ↗
-      </a>
-    ) : (
-      <button key={i} type="button" onClick={() => onTap(b.payload, b.title, false)} className="block w-full rounded-lg border border-border bg-background px-3 py-2 text-center text-xs font-semibold text-accent">
-        {b.title}
-      </button>
-    );
-
-  if (message.type === "media") {
-    // Attachments can live on any host; next/image would need each one allow-listed.
-    // eslint-disable-next-line @next/next/no-img-element
-    if (message.mediaType === "image") return <img src={message.url} alt="" className="max-h-64 rounded-lg" />;
-    if (message.mediaType === "video") return <video src={message.url} controls className="max-h-64 rounded-lg" />;
-    if (message.mediaType === "audio") return <audio src={message.url} controls />;
-    return <a href={message.url} target="_blank" rel="noreferrer" className="underline">{t("File")}</a>;
-  }
-  if (message.type === "cards") {
-    return (
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {message.cards.map((card, i) => (
-          <div key={i} className="w-48 shrink-0 overflow-hidden rounded-lg border border-border bg-background">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {card.imageUrl && <img src={card.imageUrl} alt="" className="h-28 w-full object-cover" />}
-            <div className="space-y-1 p-2">
-              <p className="text-xs font-semibold">{card.title}</p>
-              {card.subtitle && <p className="text-[11px] text-muted">{card.subtitle}</p>}
-              <div className="space-y-1 pt-1">{card.buttons?.map(button)}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-2">
-      <span>{message.text}</span>
-      {message.buttons?.length ? <div className="space-y-1 pt-1">{message.buttons.map(button)}</div> : null}
-      {message.quickReplies?.length && interactive ? (
-        <div className="flex flex-wrap gap-1 pt-1">
-          {message.quickReplies.map((r, i) => (
-            <button key={i} type="button" onClick={() => onTap(r.payload, r.title, true)} className="rounded-full border border-accent px-3 py-1 text-xs text-accent">
-              {r.title}
-            </button>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

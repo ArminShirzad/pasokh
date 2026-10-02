@@ -73,7 +73,12 @@ export function createI18n(locale: Locale) {
     const message = (locale === "fa" ? (fa as Record<string, string>)[key] : undefined) ?? key;
     const values = args[0] as Record<string, string | number> | undefined;
     return message.replace(/\{(\w+)\}/g, (placeholder, name: string) =>
-      values?.[name] === undefined ? placeholder : String(values[name]),
+      values?.[name] === undefined
+        ? placeholder
+        : // Numbers follow the interface language: «۳ کمپین», "3 campaigns".
+          typeof values[name] === "number"
+          ? (values[name] as number).toLocaleString(locale === "fa" ? "fa" : "en")
+          : String(values[name]),
     );
   }
 

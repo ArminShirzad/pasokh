@@ -10,6 +10,7 @@
  * surfaced verbatim when it applies.
  */
 
+import { handle } from "@/lib/text/handle";
 import type { Locale } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -61,6 +62,9 @@ export default function InboxPage() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const conversationRequests = useRef(new Set<string>());
+  // Ids for optimistic messages; a counter keeps the handler free of clock
+  // reads, which the React Compiler lint flags as impure.
+  const optimisticSeq = useRef(0);
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
 
@@ -217,7 +221,7 @@ export default function InboxPage() {
 
     // Optimistically show the reply immediately, then confirm with the server.
     const optimistic: ThreadMessage = {
-      id: `optimistic-${Date.now()}`,
+      id: `optimistic-${++optimisticSeq.current}`,
       text,
       fromMe: true,
       fromUsername: null,
@@ -308,7 +312,7 @@ export default function InboxPage() {
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {c.detailsUnavailable ? t("Details unavailable") : `@${c.contact.username ?? "unknown"}`}
+                        {c.detailsUnavailable ? t("Details unavailable") : `${handle(c.contact.username ?? "unknown")}`}
                       </span>
                       <span className="shrink-0 text-[11px] text-zinc-500">
                         {formatTime(c.updatedTime, locale)}
@@ -351,7 +355,7 @@ export default function InboxPage() {
                   {t("Back")}
                 </button>
                 <span className="truncate">
-                  {active.detailsUnavailable ? t("Details unavailable") : `@${active.contact.username ?? "unknown"}`}
+                  {active.detailsUnavailable ? t("Details unavailable") : `${handle(active.contact.username ?? "unknown")}`}
                 </span>
               </div>
 

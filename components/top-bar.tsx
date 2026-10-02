@@ -6,6 +6,7 @@
  * Page title, mobile hamburger, and connection status.
  */
 
+import { handle } from "@/lib/text/handle";
 import type { StaticMessageKey } from "@/lib/i18n";
 import { useI18n } from "@/lib/i18n/provider";
 import { usePathname } from "next/navigation";
@@ -68,7 +69,7 @@ export default function TopBar({
         <p className="shrink-0 truncate text-sm text-muted">
           {instagramAccountCount > 1
             ? t("{count} accounts", { count: instagramAccountCount })
-            : `@${instagramUsername}`}
+            : `${handle(instagramUsername)}`}
         </p>
       ) : (
         <a

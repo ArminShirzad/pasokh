@@ -41,7 +41,7 @@ describe("interface translations", () => {
       "2 connected accounts",
     );
     expect(createI18n("fa").t("{count} connected accounts", values)).toBe(
-      "2 حساب متصل",
+      "۲ حساب متصل",
     );
   });
 
@@ -50,7 +50,9 @@ describe("interface translations", () => {
     expect(t("Hello, {name}!", { name: "{count} <b>Alex</b> $&" })).toBe(
       "سلام {count} <b>Alex</b> $&!",
     );
-    expect(t("{count} campaigns", { count: 0 })).toBe("0 کمپین");
+    expect(t("{count} campaigns", { count: 0 })).toBe("۰ کمپین");
+    // Numbers render in Persian digits in Persian, but strings are left as given.
+    expect(t("{count} campaigns", { count: "12" })).toBe("12 کمپین");
   });
 
   it("translates display labels without changing stored codes or unknown values", () => {

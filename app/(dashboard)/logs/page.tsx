@@ -6,6 +6,7 @@
  * Filterable, paginated table of DM logs.
  */
 
+import { handle } from "@/lib/text/handle";
 import { useI18n } from "@/lib/i18n/provider";
 import { useEffect, useState, useCallback } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
@@ -170,7 +171,7 @@ export default function LogsPage() {
                   <tr key={log.id} className="hover:bg-surface-hover/50 transition-colors">
                     <td className="px-4 py-4 sm:px-6">
                       <span className="font-medium text-foreground">
-                        @{log.commenterName ?? log.commenterId.slice(0, 8)}
+                        {handle(log.commenterName ?? log.commenterId.slice(0, 8))}
                       </span>
                     </td>
                     <td className="px-4 py-4 max-w-[200px] sm:px-6">
@@ -180,7 +181,7 @@ export default function LogsPage() {
                       <span className="text-muted">{log.automation.name}</span>
                     </td>
                     <td className="px-4 py-4 sm:px-6">
-                      <span className="text-muted">@{log.instagramAccount.username}</span>
+                      <span className="text-muted">{handle(log.instagramAccount.username)}</span>
                     </td>
                     <td className="px-4 py-4 sm:px-6">
                       <StatusBadge status={log.status} />

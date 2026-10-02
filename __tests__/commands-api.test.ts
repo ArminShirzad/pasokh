@@ -34,12 +34,9 @@ describe("saving a command", () => {
     expect("input" in result && result.input).toMatchObject({ matchMode: "EXACT", storyScope: "ALL", isActive: true, likeTrigger: false });
   });
 
-  it("refuses a command nothing can trigger, which would sit there doing nothing", async () => {
+  it("accepts a command with no keywords as a menu item, opened only by other commands' buttons", async () => {
     const result = await readCommandInput(req({ ...base, keywords: [] }), "ws");
-    expect("response" in result && (await result.response.json()).problems).toContainEqual({
-      path: "keywords",
-      message: "Add at least one keyword or another trigger.",
-    });
+    expect("input" in result).toBe(true);
   });
 
   it("refuses a message Instagram would reject, pointing at the response", async () => {

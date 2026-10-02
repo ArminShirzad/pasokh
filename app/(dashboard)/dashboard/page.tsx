@@ -6,6 +6,7 @@
  * Overview cards, 7-day chart, and recent activity feed.
  */
 
+import { handle } from "@/lib/text/handle";
 import { useI18n } from "@/lib/i18n/provider";
 import { useEffect, useState } from "react";
 import AccountSelect, { type AccountOption } from "@/components/account-select";
@@ -185,11 +186,11 @@ export default function DashboardPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground truncate">
-                    @{log.commenterName ?? "unknown"}
+                    {handle(log.commenterName ?? "unknown")}
                   </p>
                   <p className="text-xs text-muted truncate">
                     {log.instagramAccount
-                      ? `@${log.instagramAccount.username} · `
+                      ? `${handle(log.instagramAccount.username)} · `
                       : ""}
                     {log.commentText}
                   </p>

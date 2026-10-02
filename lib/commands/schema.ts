@@ -39,9 +39,9 @@ export type CommandInput = z.infer<typeof commandInputSchema>;
 /** Problems as translation keys with where they are, for the builder to show. */
 export function commandProblems(input: CommandInput): { path: string; message: string }[] {
   const problems: { path: string; message: string }[] = [];
-  const hasTrigger =
-    input.keywords.length > 0 || input.onStoryMention || (input.storyScope !== "ALL");
-  if (!hasTrigger) problems.push({ path: "keywords", message: "Add at least one keyword or another trigger." });
+  // A command with no trigger of its own is a menu item: it runs only when a
+  // button or quick reply of another command opens it (Directam users invent
+  // keywords like «تهران10» for this). The builder labels it "menu only".
   if (input.storyScope === "SPECIFIC" && input.storyIds.length === 0) {
     problems.push({ path: "storyIds", message: "Choose at least one story." });
   }
