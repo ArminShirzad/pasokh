@@ -24,6 +24,7 @@ import {
   type ProcessFollowUpJob,
 } from "./client";
 import { prisma } from "@/lib/db/client";
+import { isOwnComment } from "@/lib/instagram/own-comment";
 import {
   MetaApiError,
   RateLimitError,
@@ -381,6 +382,9 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
   });
 
   for (const automation of automations) {
+    // Also guard jobs queued before the ingress fix and polling jobs. Never
+    // let our public reply become a new private/public reply trigger.
+    if (isOwnComment(automation.instagramAccount, { id: commenterId, username: commenterName })) continue;
     // "Any word" campaigns fire on every comment; otherwise require a keyword hit.
     const matchResult = automation.matchAnyWord
       ? { matched: true, matchedKeyword: null }

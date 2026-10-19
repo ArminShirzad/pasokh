@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/client';
+import { isOwnComment } from '@/lib/instagram/own-comment';
 import { getDMQueue, MESSAGE_JOB_NAME, POSTBACK_JOB_NAME } from '@/lib/queue/client';
 import { parseCommentEvents, parseMessageEvents, parsePostbackEvents, parseReadEvents } from '@/lib/meta/webhook';
 import { Prisma, type InstagramProvider } from '@/app/generated/prisma/client';
@@ -12,7 +13,7 @@ export async function processInstagramWebhook({ payload: incoming, provider, wor
   if (incoming.object !== 'instagram' || !Array.isArray(incoming.entry)) return;
   const accounts = await prisma.instagramAccount.findMany({
     where: { instagramId: { in: incoming.entry.map(e => e.id) }, provider, ...(workspaceId ? { workspaceId } : {}) },
-    select: { id: true, instagramId: true, workspaceId: true },
+    select: { id: true, instagramId: true, username: true, workspaceId: true },
   });
   const accountMap = new Map(accounts.map(a => [a.instagramId, a]));
   const allowed = new Set(accountMap.keys());
@@ -39,6 +40,7 @@ export async function processInstagramWebhook({ payload: incoming, provider, wor
     for (const event of commentEvents) {
       const account = accountMap.get(event.instagramAccountId);
       if (!account) continue;
+      if (isOwnComment(account, { id: event.commenterId, username: event.commenterName })) continue;
 
       await queue.add(
         "process-comment",

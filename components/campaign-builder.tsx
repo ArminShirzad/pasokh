@@ -979,7 +979,18 @@ export default function CampaignBuilder({ mode, campaignId }: CampaignBuilderPro
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none resize-none"
               maxLength={1000}
             />
-            {usesCommand ? null : linkOpen ? (
+            {usesCommand ? (
+              <label className="block space-y-2 text-sm text-foreground">
+                <span>{t("Button label (e.g. Open link)")}</span>
+                <input
+                  value={linkButtonLabel}
+                  onChange={(e) => setLinkButtonLabel(e.target.value)}
+                  placeholder={t("Button label (e.g. Open link)")}
+                  maxLength={20}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-zinc-500 focus:border-accent/40 focus:outline-none"
+                />
+              </label>
+            ) : linkOpen ? (
               <div className="space-y-2">
                 <input
                   value={trackedDestinationUrl}

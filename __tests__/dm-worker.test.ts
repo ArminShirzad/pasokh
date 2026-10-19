@@ -314,6 +314,23 @@ beforeEach(() => {
   mockGetUserFollowStatus.mockResolvedValue(true);
 });
 
+describe("owner comment loop protection", () => {
+  it.each(["WEBHOOK", "POLLING"])("does not send or claim a queued %s owner comment under a different scoped ID", async (source) => {
+    mockPrisma.automation.findMany.mockResolvedValue([{
+      ...mockAutomation, matchAnyWord: true, publicReplyEnabled: true,
+      publicReplyMessages: ["Check your DMs"],
+      instagramAccount: { ...mockAutomation.instagramAccount, username: "anime_pooya" },
+    }]);
+    await getProcessor()(createMockJob({ ...mockJobData, source,
+      commenterId: "17841462245014722", commenterName: "ANIME_POOYA" }));
+    expect(mockPrisma.dmLog.upsert).not.toHaveBeenCalled();
+    expect(mockPrisma.dmLog.updateMany).not.toHaveBeenCalled();
+    expect(mockReserveDMSlot).not.toHaveBeenCalled();
+    expect(mockSendPrivateReply).not.toHaveBeenCalled();
+    expect(mockSendPrivateReplyWithButton).not.toHaveBeenCalled();
+  });
+});
+
 describe("DM Worker — comments left on an ad", () => {
   it("also matches the organic post the ad was created from", async () => {
     const processor = getProcessor();

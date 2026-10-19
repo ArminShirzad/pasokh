@@ -28,6 +28,7 @@
 import { MAX_COMMENT_SEND_ATTEMPTS } from "@/lib/queue/comment-delivery";
 import { hasLegacyUnconfirmedDelivery } from "@/lib/instagram/delivery-errors";
 import { prisma } from "@/lib/db/client";
+import { isOwnComment } from "@/lib/instagram/own-comment";
 import { getDMQueue } from "@/lib/queue/client";
 import {
   getRecentMediaComments,
@@ -208,7 +209,7 @@ async function sweepCampaign({
     // keyword, and (c) have no reply from the account owner yet.
     const needsAction = comments.filter((c) => {
       const authorId = c.from?.id;
-      if (!authorId || authorId === account.instagramId) return false;
+      if (!authorId || isOwnComment(account, c.from!)) return false;
 
       const matched = automation.matchAnyWord
         ? true

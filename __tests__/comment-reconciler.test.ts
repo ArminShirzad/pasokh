@@ -93,6 +93,7 @@ describe("comment polling does not recreate unsafe sends", () => {
         instagramAccount: {
           id: "connection",
           instagramId: "owner",
+          username: "anime_pooya",
           provider: "META",
           accessToken: "test",
         },
@@ -112,6 +113,16 @@ describe("comment polling does not recreate unsafe sends", () => {
         timestamp: new Date().toISOString(),
       },
     ]);
+  });
+  it("never enqueues the owner's native-ID comments from polling", async () => {
+    mockPrisma.dmLog.findMany.mockResolvedValue([]);
+    readComments.mockResolvedValue([
+      { id: 'echo', text: 'AI', from: {id: 'native-owner', username: 'anime_pooya'}, timestamp: new Date().toISOString() },
+      { id: 'fan', text: 'AI', from: {id: 'fan', username: 'reader'}, timestamp: new Date().toISOString() },
+    ]);
+    await reconcileComments();
+    expect(queueAdd).toHaveBeenCalledTimes(1);
+    expect(queueAdd.mock.calls[0][1].commentId).toBe('fan');
   });
   it.each([
     { status: "FAILED", attempts: 1, dmDeliveryUnconfirmed: true },
