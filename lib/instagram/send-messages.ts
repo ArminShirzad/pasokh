@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { resolveUploadedMedia } from '@/lib/media/resolve-url';
 import * as meta from "@/lib/meta/client";
 import {
   zernioRequest,
@@ -332,6 +333,7 @@ export async function sendOutboundMessage({
   recipient: Recipient;
   message: OutboundMessage;
 }): Promise<{ message_id: string; recipient_id?: string }> {
+  message = await resolveUploadedMedia(message);
   const problems = validateOutbound(message);
   if (problems.length) throw new Error(`Invalid message: ${problems.map((p) => `${p.path}: ${p.message}`).join("; ")}`);
   if ("commentId" in recipient && message.type !== "text") {
