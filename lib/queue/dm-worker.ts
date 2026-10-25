@@ -5,6 +5,7 @@ import {
   isDeliveryUnconfirmed,
 } from "@/lib/instagram/delivery-errors";
 import { claimCommentDelivery, MAX_COMMENT_SEND_ATTEMPTS } from "./comment-delivery";
+import { upsertDmLog } from "./dm-log";
 import { createHash } from "node:crypto";
 import { UnrecoverableError, Worker, type Job } from "bullmq";
 import {
@@ -434,7 +435,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
     }
 
     if (!hasInstagramCredentials(automation.instagramAccount)) {
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -468,7 +469,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
         `${job.id}:${automation.id}`
       );
     } catch {
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -495,7 +496,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
       continue;
     }
 
-    await prisma.dmLog.upsert({
+    await upsertDmLog({
       where: { automationId_commentId: { automationId: automation.id, commentId } },
       create: {
         workspaceId: automation.workspaceId,
@@ -1068,7 +1069,7 @@ async function runCampaignCommand({
       ...data,
       ...(data.status === "SENT" ? { dmSentAt: new Date(), errorMessage: null } : {}),
     };
-    return prisma.dmLog.upsert({
+    return upsertDmLog({
       where: { automationId_commentId: { automationId: automation.id, commentId: logCommentId } },
       create: {
         workspaceId: automation.workspaceId,
@@ -1389,7 +1390,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
 
   const usage = await reserveWorkspaceDMSend(automation.workspaceId);
   if (!usage.allowed) {
-    await prisma.dmLog.upsert({
+    await upsertDmLog({
       where: {
         automationId_commentId: {
           automationId: automation.id,
@@ -1453,7 +1454,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
         },
       );
     }
-    await prisma.dmLog.upsert({
+    await upsertDmLog({
       where: {
         automationId_commentId: {
           automationId: automation.id,
@@ -1495,7 +1496,7 @@ async function processPostback(job: Job<ProcessPostbackJob>): Promise<void> {
       return;
     }
 
-    await prisma.dmLog.upsert({
+    await upsertDmLog({
       where: {
         automationId_commentId: {
           automationId: automation.id,
@@ -1762,7 +1763,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
     };
 
     if (!hasInstagramCredentials(automation.instagramAccount)) {
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -1789,7 +1790,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         `${job.id}:${automation.id}`
       );
     } catch {
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -1855,7 +1856,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
 
     const usage = await reserveWorkspaceDMSend(automation.workspaceId);
     if (!usage.allowed) {
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -1920,7 +1921,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         }
       }
 
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,
@@ -1944,7 +1945,7 @@ async function processMessage(job: Job<ProcessMessageJob>): Promise<void> {
         automation.workspaceId,
         usage.periodStart
       );
-      await prisma.dmLog.upsert({
+      await upsertDmLog({
         where: {
           automationId_commentId: {
             automationId: automation.id,

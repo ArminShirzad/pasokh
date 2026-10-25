@@ -15,6 +15,7 @@ vi.mock("@/lib/db/client", () => ({
   },
 }));
 import { claimCommentDelivery } from "../lib/queue/comment-delivery";
+import { upsertDmLog } from "../lib/queue/dm-log";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const schema = `delivery_claims_${randomBytes(4).toString("hex")}`;
@@ -108,6 +109,26 @@ describe.skipIf(!databaseUrl)("durable comment delivery on Postgres", () => {
       await claimCommentDelivery("automation", "another-comment", "dm"),
     ).toBe(true);
   });
+  it("concurrent webhook and polling log creation still permits exactly one send", async () => {
+    const create = {
+      workspaceId: "workspace", instagramAccountId: "account",
+      automationId: "automation", commenterId: "fan",
+      commentId: "racing-create", commentText: "AI",
+    };
+    const results = await Promise.all(Array.from({ length: 16 }, async () => {
+      await upsertDmLog({
+        where: { automationId_commentId: { automationId: "automation", commentId: create.commentId } },
+        create, update: {},
+      });
+      return claimCommentDelivery("automation", create.commentId, "dm");
+    }));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await state.db.dmLog.count({ where: { commentId: create.commentId } })).toBe(1);
+    const log = await state.db.dmLog.findUniqueOrThrow({
+      where: { automationId_commentId: { automationId: "automation", commentId: create.commentId } },
+    });
+    expect(log).toMatchObject({ attempts: 1, dmDeliveryUnconfirmed: true });
+  }, 20_000);
   it("caps actual attempts across independent jobs after confirmed rejections", async () => {
     const row = await seed("bounded");
     for (let i = 0; i < 3; i++) {
