@@ -765,7 +765,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             context: accessToken,
             instagramAccountId: automation.instagramAccount.instagramId,
             commentId: commentId,
-            message: withContinuePrompt(openingText),
+            message: withContinuePrompt(openingText, automation.openingDmButtonLabel),
             postId: mediaId,
           });
           continuePayload = openingPayload;
@@ -779,7 +779,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
           context: accessToken,
           instagramAccountId: automation.instagramAccount.instagramId,
           commentId: commentId,
-          message: withContinuePrompt(promptText),
+          message: withContinuePrompt(promptText, automation.followPromptButtonLabel || defaultFollowButtonLabel()),
           postId: mediaId,
         });
         continuePayload = `followcheck:${automation.id}`;
@@ -804,7 +804,7 @@ async function processComment(job: Job<ProcessCommentJob>): Promise<void> {
             context: accessToken,
             instagramAccountId: automation.instagramAccount.instagramId,
             commentId: commentId,
-            message: withContinuePrompt(replyText),
+            message: withContinuePrompt(replyText, automation.linkButtonLabel || defaultContinueButtonLabel()),
             postId: mediaId,
           });
           continuePayload = revealPayload;

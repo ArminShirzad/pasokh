@@ -73,6 +73,8 @@
   "Button": "دکمه",
   "Button label": "متن دکمه",
   "Button label (e.g. Open link)": "متن دکمه (مثلاً: باز کردن لینک)",
+  "Button label / suggested reply": "متن دکمه / پاسخ پیشنهادی",
+  "Without a button, this label is suggested as the reply text. Any reply continues.": "وقتی دکمه نمایش داده نمی‌شود، این متن برای جواب دادن پیشنهاد می‌شود. با هر جوابی مرحلهٔ بعد اجرا می‌شود.",
   "Button labels can be at most 20 characters.": "متن دکمه حداکثر ۲۰ کاراکتر است.",
   "Buttons": "دکمه‌ها",
   "CTR": "نرخ کلیک",

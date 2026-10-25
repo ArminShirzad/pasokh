@@ -1335,6 +1335,34 @@ describe("DM Worker — DM keyword trigger", () => {
 });
 
 describe("Zernio worker routing", () => {
+  it.each([
+    ["opening", { openingDmEnabled: true, openingDmMessage: "ادامه", openingDmButtonLabel: "دریافت" }, "دریافت"],
+    ["follow", { requireFollow: true, followPromptMessage: "فالو کن", followPromptButtonLabel: "فالو کردم" }, "فالو کردم"],
+    ["smart reply", { commandId: "command", linkButtonLabel: "رزرو" }, "رزرو"],
+  ] as const)("uses the edited %s button label in text-only replies through both providers", async (_kind, fields, label) => {
+    vi.stubEnv("DEFAULT_LOCALE", "fa");
+    for (const provider of ["META", "ZERNIO"] as const) {
+      mockGetUserFollowStatus.mockResolvedValue(null);
+      mockPrisma.zernioConnection.findUnique.mockResolvedValue({ apiKey: "encrypted_key" });
+      mockPrisma.automation.findMany.mockResolvedValue([{
+        ...mockAutomation, ...fields,
+        instagramAccount: { ...mockAutomation.instagramAccount, provider, workspaceId: "workspace_123", zernioAccountId: "zernio_selected" },
+      }]);
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ isFollower: null })))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ messageId: "sent" })));
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        await getProcessor()(createMockJob());
+        const text = provider === "META"
+          ? mockSendPrivateReply.mock.calls.at(-1)![3]
+          : JSON.parse(fetchMock.mock.calls[1][1].body).message;
+        expect(text).toContain(`«${label}»`);
+        expect(text).not.toContain("«اوکی»");
+      } finally { vi.unstubAllGlobals(); }
+    }
+  });
+
   it("sends a text-first follow prompt on unknown follow status, once, through the selected provider", async () => {
     mockPrisma.zernioConnection.findUnique.mockResolvedValue({
       apiKey: "encrypted_key",

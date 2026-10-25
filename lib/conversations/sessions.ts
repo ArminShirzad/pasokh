@@ -11,18 +11,25 @@ const COMMENT_CONTINUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /**
  * Appended to a text-only comment reply so the person knows to answer. The
  * answer opens a normal DM thread, where buttons and cards are allowed again.
- * Campaign copy is the owner's, in their language; this line follows the
- * instance language because there is no per-campaign field for it yet.
+ * Suggest the campaign's current button label instead of a fixed reply word.
+ * This is only a suggestion: any answer still resumes the same session.
  */
-export function continuePrompt(): string {
-  return defaultLocale() === "fa"
-    ? "برای ادامه، هر پیامی (مثلاً «اوکی») در جواب همین پیام بفرست 👇"
-    : "Reply to this message with anything (e.g. “ok”) to continue 👇";
+export function continuePrompt(replyLabel?: string | null): string {
+  const label = replyLabel?.trim();
+  if (defaultLocale() === "fa") {
+    return label
+      ? `برای ادامه، «${label}» یا هر پیام دیگری در جواب همین پیام بفرست 👇`
+      : "برای ادامه، در جواب همین پیام یک پیام بفرست 👇";
+  }
+  return label
+    ? `Reply with “${label}” or any other message to continue 👇`
+    : "Reply to this message to continue 👇";
 }
 
-export function withContinuePrompt(text: string): string {
+export function withContinuePrompt(text: string, replyLabel?: string | null): string {
   const body = text.trim();
-  return body ? `${body}\n\n${continuePrompt()}` : continuePrompt();
+  const prompt = continuePrompt(replyLabel);
+  return body ? `${body}\n\n${prompt}` : prompt;
 }
 
 /** Remember what this person's next DM should do. Re-arms on a repeat comment. */
